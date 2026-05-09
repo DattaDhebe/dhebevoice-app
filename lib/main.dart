@@ -67,7 +67,7 @@ class TextReaderApp extends StatelessWidget {
             contentPadding: const EdgeInsets.all(20),
           ),
           sliderTheme: const SliderThemeData(
-            showValueIndicator: ShowValueIndicator.always,
+            showValueIndicator: ShowValueIndicator.onDrag,
           ),
         ),
         home: const HomeScreen(),

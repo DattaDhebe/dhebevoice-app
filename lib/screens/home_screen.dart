@@ -17,7 +17,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _textController;
-  StreamSubscription<String>? _shareSubscription;
+  StreamSubscription<List<SharedMediaFile>>? _shareSubscription;
 
   @override
   void initState() {
@@ -31,14 +31,35 @@ class _HomeScreenState extends State<HomeScreen> {
     final service = context.read<TtsService>();
 
     _shareSubscription =
-        ReceiveSharingIntent.instance.getTextStream().listen((value) {
-      service.handleSharedText(value);
+        ReceiveSharingIntent.instance.getMediaStream().listen((value) async {
+      final sharedText = _extractSharedText(value);
+      if (sharedText != null) {
+        await service.handleSharedText(sharedText);
+      }
     });
 
-    final initialText = await ReceiveSharingIntent.instance.getInitialText();
-    if (initialText != null && initialText.trim().isNotEmpty) {
+    final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
+    final initialText = _extractSharedText(initialMedia);
+    if (initialText != null) {
       await service.handleSharedText(initialText);
+      await ReceiveSharingIntent.instance.reset();
     }
+  }
+
+  String? _extractSharedText(List<SharedMediaFile> sharedItems) {
+    for (final item in sharedItems) {
+      final candidate = switch (item.type) {
+        SharedMediaType.text || SharedMediaType.url => item.path,
+        SharedMediaType.file || SharedMediaType.image || SharedMediaType.video =>
+          item.message,
+      };
+
+      if (candidate != null && candidate.trim().isNotEmpty) {
+        return candidate.trim();
+      }
+    }
+
+    return null;
   }
 
   @override
@@ -176,7 +197,7 @@ class _HeaderCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Language: ${ttsService.selectedLanguage} · Voice: ${ttsService.selectedVoice?.label ?? 'Not selected'}',
+                    'Language: ${ttsService.selectedLanguage} | Voice: ${ttsService.selectedVoice?.label ?? 'Not selected'}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white70,
                         ),

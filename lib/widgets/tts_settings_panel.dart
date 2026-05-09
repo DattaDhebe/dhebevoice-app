@@ -53,7 +53,7 @@ class TtsSettingsPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: languages.contains(selectedLanguage)
+                  initialValue: languages.contains(selectedLanguage)
                       ? selectedLanguage
                       : (languages.isEmpty ? null : languages.first),
                   items: languages
