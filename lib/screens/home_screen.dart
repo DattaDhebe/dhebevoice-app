@@ -467,6 +467,7 @@ class _ImportProgressDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return PopScope(
       canPop: false,
       child: Consumer<NovelImportController>(
@@ -494,7 +495,7 @@ class _ImportProgressDialog extends StatelessWidget {
                     Text(
                       '$progressPercent% complete',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white70,
+                            color: colorScheme.onSurfaceVariant,
                           ),
                     ),
                   ] else ...[
@@ -502,7 +503,7 @@ class _ImportProgressDialog extends StatelessWidget {
                     Text(
                       'Following chapter links and downloading text...',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white70,
+                            color: colorScheme.onSurfaceVariant,
                           ),
                     ),
                   ],
@@ -544,6 +545,7 @@ class _HeaderCard extends StatelessWidget {
       ReaderPlaybackState.stopped => 'Stopped',
       ReaderPlaybackState.idle => 'Ready',
     };
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       child: Padding(
@@ -572,7 +574,7 @@ class _HeaderCard extends StatelessWidget {
                   Text(
                     'Language: ${ttsService.selectedLanguage} | Voice: ${ttsService.selectedVoice?.label ?? 'Not selected'}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white70,
+                          color: colorScheme.onSurfaceVariant,
                         ),
                   ),
                   if (ttsService.errorMessage != null) ...[
@@ -651,6 +653,7 @@ class _ActiveNovelCard extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       child: Padding(
@@ -666,7 +669,7 @@ class _ActiveNovelCard extends StatelessWidget {
             Text(
               '${novel.chapters.length} chapters • ${Uri.tryParse(novel.sourceUrl)?.host ?? novel.sourceUrl}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white70,
+                    color: colorScheme.onSurfaceVariant,
                   ),
             ),
             if (chapter != null) ...[
@@ -750,6 +753,7 @@ class _NowReadingCard extends StatelessWidget {
     final chapterText = chapterLabel == null || chapterLabel!.trim().isEmpty
         ? 'Manual text'
         : chapterLabel!;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       child: Padding(
@@ -767,7 +771,7 @@ class _NowReadingCard extends StatelessWidget {
                 Text(
                   'Paragraph ${ttsService.currentParagraphIndex + 1}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white60,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                 ),
               ],
@@ -777,7 +781,7 @@ class _NowReadingCard extends StatelessWidget {
               Text(
                 chapterText,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white70,
+                      color: colorScheme.onSurfaceVariant,
                     ),
               ),
             ],
@@ -788,7 +792,7 @@ class _NowReadingCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     height: 1.45,
-                    color: Colors.white.withValues(alpha: 0.88),
+                    color: colorScheme.onSurface.withValues(alpha: 0.88),
                   ),
             ),
             if (ttsService.paragraphCount > 0) ...[

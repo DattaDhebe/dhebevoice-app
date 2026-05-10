@@ -18,6 +18,7 @@ class PlayerControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final filledStyle = FilledButton.styleFrom(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       visualDensity: VisualDensity.compact,
@@ -66,9 +67,9 @@ class PlayerControls extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFF111821),
+          color: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white10),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Row(
           children: [

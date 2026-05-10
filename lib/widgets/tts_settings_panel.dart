@@ -17,6 +17,7 @@ class TtsSettingsPanel extends StatelessWidget {
     required this.onRateChanged,
     required this.onPitchChanged,
     required this.onVolumeChanged,
+    this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 24),
   });
 
   final List<String> languages;
@@ -31,6 +32,7 @@ class TtsSettingsPanel extends StatelessWidget {
   final ValueChanged<double> onRateChanged;
   final ValueChanged<double> onPitchChanged;
   final ValueChanged<double> onVolumeChanged;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
@@ -38,8 +40,10 @@ class TtsSettingsPanel extends StatelessWidget {
         .where((voice) => voice.locale == selectedLanguage)
         .toList();
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Card(
           child: Padding(
@@ -129,6 +133,7 @@ class TtsSettingsPanel extends StatelessWidget {
           onChanged: onVolumeChanged,
         ),
       ],
+      ),
     );
   }
 }

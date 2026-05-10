@@ -11,6 +11,7 @@ class StorageService {
   static const _positionKey = 'reader_position';
   static const _activeNovelIdKey = 'reader_active_novel_id';
   static const _activeChapterIndexKey = 'reader_active_chapter_index';
+  static const _themeModeKey = 'reader_theme_mode';
 
   late final SharedPreferences _prefs;
 
@@ -28,6 +29,7 @@ class StorageService {
   int get position => _prefs.getInt(_positionKey) ?? 0;
   String? get activeNovelId => _prefs.getString(_activeNovelIdKey);
   int get activeChapterIndex => _prefs.getInt(_activeChapterIndexKey) ?? 0;
+  String? get themeMode => _prefs.getString(_themeModeKey);
 
   Future<void> saveText(String value) => _prefs.setString(_textKey, value);
   Future<void> saveLanguage(String value) =>
@@ -48,6 +50,9 @@ class StorageService {
   Future<void> savePitch(double value) => _prefs.setDouble(_pitchKey, value);
   Future<void> saveVolume(double value) => _prefs.setDouble(_volumeKey, value);
   Future<void> savePosition(int value) => _prefs.setInt(_positionKey, value);
+  Future<void> saveThemeMode(String value) =>
+      _prefs.setString(_themeModeKey, value);
+
   Future<void> resetTtsSettings() async {
     await _prefs.remove(_languageKey);
     await _prefs.remove(_voiceNameKey);
