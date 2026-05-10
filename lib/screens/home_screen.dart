@@ -334,6 +334,18 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
+          bottomNavigationBar: SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: PlayerControls(
+              isPlaying: ttsService.isPlaying,
+              canResume:
+                  ttsService.isPaused || ttsService.currentCharIndex > 0,
+              onPlay: () => unawaited(audioHandler.play()),
+              onPause: () => unawaited(audioHandler.pause()),
+              onStop: () => unawaited(audioHandler.stop()),
+            ),
+          ),
           body: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -422,15 +434,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         onOpenParagraphs: _showParagraphSheet,
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    PlayerControls(
-                      isPlaying: ttsService.isPlaying,
-                      canResume:
-                          ttsService.isPaused || ttsService.currentCharIndex > 0,
-                      onPlay: () => unawaited(audioHandler.play()),
-                      onPause: () => unawaited(audioHandler.pause()),
-                      onStop: () => unawaited(audioHandler.stop()),
-                    ),
                   ],
                 );
               },

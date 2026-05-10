@@ -27,7 +27,7 @@ class ReaderAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
   @override
   Future<void> click([MediaButton button = MediaButton.media]) async {
-    final isPlaying = playbackState.nvalue?.playing ?? _ttsService.isPlaying;
+    final isPlaying = playbackState.value.playing;
     switch (button) {
       case MediaButton.media:
         if (isPlaying) {
