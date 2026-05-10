@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
@@ -286,6 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, importer, ttsService, _) {
         _syncImportDialog(importer);
         final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+        final audioHandler = context.read<AudioHandler>();
 
         if (_textController.text != ttsService.text) {
           _textController.value = TextEditingValue(
@@ -356,6 +358,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       _ActiveNovelCard(
                         importer: importer,
                         onOpenChapters: _showChapterSheet,
+                        onPreviousChapter: () =>
+                            unawaited(audioHandler.skipToPrevious()),
+                        onNextChapter: () =>
+                            unawaited(audioHandler.skipToNext()),
                       ),
                     ],
                     const SizedBox(height: 16),
@@ -423,9 +429,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       isPlaying: ttsService.isPlaying,
                       canResume: ttsService.isPaused ||
                           ttsService.currentCharIndex > 0,
-                      onPlay: ttsService.play,
-                      onPause: ttsService.pause,
-                      onStop: ttsService.stop,
+                      onPlay: () => unawaited(audioHandler.play()),
+                      onPause: () => unawaited(audioHandler.pause()),
+                      onStop: () => unawaited(audioHandler.stop()),
                     ),
                   ],
                 );
@@ -640,10 +646,14 @@ class _ActiveNovelCard extends StatelessWidget {
   const _ActiveNovelCard({
     required this.importer,
     required this.onOpenChapters,
+    required this.onPreviousChapter,
+    required this.onNextChapter,
   });
 
   final NovelImportController importer;
   final VoidCallback onOpenChapters;
+  final VoidCallback onPreviousChapter;
+  final VoidCallback onNextChapter;
 
   @override
   Widget build(BuildContext context) {
@@ -688,7 +698,7 @@ class _ActiveNovelCard extends StatelessWidget {
                   child: FilledButton.tonalIcon(
                     style: actionStyle,
                     onPressed: importer.activeChapterIndex > 0
-                        ? importer.goToPreviousChapter
+                        ? onPreviousChapter
                         : null,
                     icon: const Icon(Icons.chevron_left),
                     label: const Text(
@@ -719,7 +729,7 @@ class _ActiveNovelCard extends StatelessWidget {
                     style: actionStyle,
                     onPressed:
                         importer.activeChapterIndex < novel.chapters.length - 1
-                            ? importer.goToNextChapter
+                            ? onNextChapter
                             : null,
                     icon: const Icon(Icons.chevron_right),
                     label: const Text(

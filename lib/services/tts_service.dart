@@ -44,6 +44,7 @@ class TtsService extends ChangeNotifier {
   String? _errorMessage;
   int _currentCharIndex = 0;
   int _currentParagraphIndex = 0;
+  int _pausedCharIndex = 0;
   int _sessionId = 0;
   int _activeChunkOffset = 0;
   int _queuedChunkIndex = 0;
@@ -130,6 +131,7 @@ class TtsService extends ChangeNotifier {
             : _queuedChunks[min(_queuedChunkIndex, _queuedChunks.length - 1)];
         _activeChunkOffset = activeChunk?.start ?? _activeChunkOffset;
         _currentCharIndex = max(0, _activeChunkOffset + start);
+        _pausedCharIndex = _currentCharIndex;
         _currentParagraphIndex = activeChunk?.paragraphIndex ??
             _paragraphIndexForOffset(_currentCharIndex);
         unawaited(_storageService.savePosition(_currentCharIndex));
@@ -335,11 +337,15 @@ class TtsService extends ChangeNotifier {
 
   Future<void> updateText(String value, {bool resetPosition = false}) async {
     _text = value;
+    _errorMessage = null;
     if (resetPosition || _currentCharIndex > _text.length) {
       _currentCharIndex = 0;
       _currentParagraphIndex = 0;
+      _activeChunkOffset = 0;
+      _pausedCharIndex = 0;
     } else {
       _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
+      _pausedCharIndex = min(_currentCharIndex, _text.length);
     }
 
     await _storageService.saveText(value);
@@ -370,6 +376,7 @@ class TtsService extends ChangeNotifier {
   Future<void> setLanguage(String value) async {
     _selectedLanguage = value;
     _selectedVoice = _defaultVoiceForLanguage(value);
+    _errorMessage = null;
     await _storageService.saveLanguage(value);
     await _storageService.saveVoice(
       _selectedVoice?.name,
@@ -381,6 +388,7 @@ class TtsService extends ChangeNotifier {
 
   Future<void> setVoice(VoiceModel? voice) async {
     _selectedVoice = voice;
+    _errorMessage = null;
     if (voice != null) {
       _selectedLanguage = voice.locale;
       await _storageService.saveLanguage(voice.locale);
@@ -433,6 +441,11 @@ class TtsService extends ChangeNotifier {
   }
 
   Future<void> play() async {
+    if (isPaused) {
+      await _resumePlayback();
+      return;
+    }
+
     await _playInternal(
       startOffset: _currentCharIndex,
       endOffset: null,
@@ -482,11 +495,26 @@ class TtsService extends ChangeNotifier {
     );
   }
 
+  Future<void> _resumePlayback() async {
+    final resumeOffset = min(
+      max(_pausedCharIndex, _activeChunkOffset),
+      _text.length,
+    );
+    await _playInternal(
+      startOffset: resumeOffset,
+      endOffset: _queuedEndOffset,
+      triggerCompletionHandler: _queuedTriggerCompletionHandler,
+      resetPositionOnComplete: _queuedResetPositionOnComplete,
+      shouldStopBeforeQueueing: true,
+    );
+  }
+
   Future<void> _playInternal({
     required int startOffset,
     required int? endOffset,
     required bool triggerCompletionHandler,
     required bool resetPositionOnComplete,
+    bool shouldStopBeforeQueueing = true,
   }) async {
     if (!_engineReady) {
       _errorMessage =
@@ -543,11 +571,14 @@ class TtsService extends ChangeNotifier {
     _queuedResetPositionOnComplete = resetPositionOnComplete;
     _queuedTriggerCompletionHandler = triggerCompletionHandler;
     _activeChunkOffset = chunks.first.start;
+    _pausedCharIndex = startOffset;
     _currentParagraphIndex = chunks.first.paragraphIndex;
     notifyListeners();
 
     await _syncTtsOptions();
-    await _flutterTts.stop();
+    if (shouldStopBeforeQueueing) {
+      await _flutterTts.stop();
+    }
 
     final queued = await _queueChunks(chunks, localSession);
     if (!queued && _isPlaybackSessionActive(localSession)) {
@@ -606,6 +637,7 @@ class TtsService extends ChangeNotifier {
     final completedIndex = min(_queuedChunkIndex, _queuedChunks.length - 1);
     final completedChunk = _queuedChunks[completedIndex];
     _currentCharIndex = completedChunk.end;
+    _pausedCharIndex = min(_currentCharIndex, _text.length);
     _currentParagraphIndex = completedChunk.paragraphIndex;
     await _storageService.savePosition(_currentCharIndex);
 
@@ -630,6 +662,7 @@ class TtsService extends ChangeNotifier {
     _playbackState = ReaderPlaybackState.completed;
     _currentCharIndex =
         resetPositionOnComplete ? 0 : min(finalOffset, _text.length);
+    _pausedCharIndex = _currentCharIndex;
     _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
     await _storageService.savePosition(_currentCharIndex);
     notifyListeners();
@@ -653,6 +686,10 @@ class TtsService extends ChangeNotifier {
 
     _playbackState = ReaderPlaybackState.error;
     _errorMessage = _friendlyPlaybackError(message);
+    _pausedCharIndex = min(
+      max(_currentCharIndex, _activeChunkOffset),
+      _text.length,
+    );
     notifyListeners();
   }
 
@@ -689,9 +726,11 @@ class TtsService extends ChangeNotifier {
     }
 
     _sessionId++;
-    _queuedChunks = const [];
-    _queuedChunkIndex = 0;
-    _queuedEndOffset = null;
+    _pausedCharIndex = min(
+      max(_currentCharIndex, _activeChunkOffset),
+      _text.length,
+    );
+    _currentCharIndex = _pausedCharIndex;
     _playbackState = ReaderPlaybackState.paused;
     await _flutterTts.stop();
     await _audioSession?.setActive(false);
@@ -705,8 +744,11 @@ class TtsService extends ChangeNotifier {
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
     _playbackState = ReaderPlaybackState.stopped;
+    _errorMessage = null;
     _currentCharIndex = 0;
     _currentParagraphIndex = 0;
+    _activeChunkOffset = 0;
+    _pausedCharIndex = 0;
     await _flutterTts.stop();
     await _audioSession?.setActive(false);
     await _storageService.savePosition(0);

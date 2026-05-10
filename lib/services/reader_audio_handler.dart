@@ -34,7 +34,6 @@ class ReaderAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         processingState: AudioProcessingState.idle,
       ),
     );
-    await super.stop();
   }
 
   @override

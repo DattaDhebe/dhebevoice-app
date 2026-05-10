@@ -37,7 +37,7 @@ Future<void> main() async {
     ttsService: ttsService,
   );
   await novelImportController.initialize();
-  await AudioService.init(
+  final audioHandler = await AudioService.init(
     builder: () => ReaderAudioHandler(
       ttsService: ttsService,
       novelImportController: novelImportController,
@@ -46,7 +46,7 @@ Future<void> main() async {
       androidNotificationChannelId: 'com.textreader.voiceapp.playback',
       androidNotificationChannelName: 'DhebeVoice Playback',
       androidNotificationOngoing: true,
-      androidStopForegroundOnPause: false,
+      androidStopForegroundOnPause: true,
     ),
   );
 
@@ -55,6 +55,7 @@ Future<void> main() async {
       themeController: themeController,
       ttsService: ttsService,
       novelImportController: novelImportController,
+      audioHandler: audioHandler,
     ),
   );
 }
@@ -65,11 +66,13 @@ class TextReaderApp extends StatelessWidget {
     required this.themeController,
     required this.ttsService,
     required this.novelImportController,
+    required this.audioHandler,
   });
 
   final ThemeController themeController;
   final TtsService ttsService;
   final NovelImportController novelImportController;
+  final AudioHandler audioHandler;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +83,7 @@ class TextReaderApp extends StatelessWidget {
         ChangeNotifierProvider<NovelImportController>.value(
           value: novelImportController,
         ),
+        Provider<AudioHandler>.value(value: audioHandler),
       ],
       child: Consumer<ThemeController>(
         builder: (context, controller, _) {
