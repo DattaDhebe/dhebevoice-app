@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:audio_service/audio_service.dart';
 
 import 'package:provider/provider.dart';
 
@@ -6,6 +7,7 @@ import 'screens/home_screen.dart';
 import 'services/file_import_service.dart';
 import 'services/novel_import_controller.dart';
 import 'services/novel_library_service.dart';
+import 'services/reader_audio_handler.dart';
 import 'services/storage_service.dart';
 import 'services/theme_controller.dart';
 import 'services/tts_service.dart';
@@ -18,21 +20,35 @@ Future<void> main() async {
   await storageService.initialize();
   final novelLibraryService = NovelLibraryService();
   final webNovelImportService = WebNovelImportService();
+  final fileImportService = FileImportService();
   final themeController = ThemeController(storageService: storageService);
   await themeController.initialize();
 
   final ttsService = TtsService(
     storageService: storageService,
-    fileImportService: FileImportService(),
+    fileImportService: fileImportService,
   );
   await ttsService.initialize();
   final novelImportController = NovelImportController(
     storageService: storageService,
+    fileImportService: fileImportService,
     novelLibraryService: novelLibraryService,
     webNovelImportService: webNovelImportService,
     ttsService: ttsService,
   );
   await novelImportController.initialize();
+  await AudioService.init(
+    builder: () => ReaderAudioHandler(
+      ttsService: ttsService,
+      novelImportController: novelImportController,
+    ),
+    config: AudioServiceConfig(
+      androidNotificationChannelId: 'com.textreader.voiceapp.playback',
+      androidNotificationChannelName: 'DhebeVoice Playback',
+      androidNotificationOngoing: true,
+      androidStopForegroundOnPause: false,
+    ),
+  );
 
   runApp(
     TextReaderApp(

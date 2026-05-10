@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -27,8 +28,12 @@ class TtsService extends ChangeNotifier {
   final StorageService _storageService;
   final FileImportService _fileImportService;
   final FlutterTts _flutterTts = FlutterTts();
+  AudioSession? _audioSession;
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSubscription;
+  StreamSubscription<void>? _becomingNoisySubscription;
 
   List<VoiceModel> _voices = const [];
+  List<_SpeechChunk> _queuedChunks = const [];
   ReaderPlaybackState _playbackState = ReaderPlaybackState.idle;
   String _text = '';
   String _selectedLanguage = _defaultLanguage;
@@ -41,6 +46,10 @@ class TtsService extends ChangeNotifier {
   int _currentParagraphIndex = 0;
   int _sessionId = 0;
   int _activeChunkOffset = 0;
+  int _queuedChunkIndex = 0;
+  int? _queuedEndOffset;
+  bool _queuedResetPositionOnComplete = true;
+  bool _queuedTriggerCompletionHandler = true;
   bool _engineReady = false;
   Future<void> Function()? _playbackCompletedHandler;
 
@@ -68,7 +77,7 @@ class TtsService extends ChangeNotifier {
   String get currentParagraph {
     final items = paragraphs;
     if (items.isEmpty) {
-      return 'Paste text, import a .txt file, or share text into the app.';
+      return 'Paste text, import a .txt or .epub file, or share text into the app.';
     }
 
     final index = min(_currentParagraphIndex, items.length - 1);
@@ -83,6 +92,7 @@ class TtsService extends ChangeNotifier {
     _currentCharIndex = _storageService.position;
 
     await _configureTts();
+    await _configureAudioSession();
     await _loadVoices();
     await _applyStoredSelections();
     await _syncTtsOptions();
@@ -96,8 +106,9 @@ class TtsService extends ChangeNotifier {
 
   Future<void> _configureTts() async {
     try {
-      await _flutterTts.awaitSpeakCompletion(true);
+      await _flutterTts.awaitSpeakCompletion(false);
       await _flutterTts.setQueueMode(0);
+      await _flutterTts.setAudioAttributesForNavigation();
 
       _flutterTts.setStartHandler(() {
         _playbackState = ReaderPlaybackState.playing;
@@ -105,15 +116,22 @@ class TtsService extends ChangeNotifier {
         notifyListeners();
       });
 
+      _flutterTts.setCompletionHandler(() {
+        unawaited(_handleChunkCompleted());
+      });
+
       _flutterTts.setErrorHandler((message) {
-        _playbackState = ReaderPlaybackState.error;
-        _errorMessage = 'TTS error: $message';
-        notifyListeners();
+        unawaited(_handlePlaybackError(message));
       });
 
       _flutterTts.setProgressHandler((text, start, end, word) {
+        final activeChunk = _queuedChunks.isEmpty
+            ? null
+            : _queuedChunks[min(_queuedChunkIndex, _queuedChunks.length - 1)];
+        _activeChunkOffset = activeChunk?.start ?? _activeChunkOffset;
         _currentCharIndex = max(0, _activeChunkOffset + start);
-        _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
+        _currentParagraphIndex = activeChunk?.paragraphIndex ??
+            _paragraphIndexForOffset(_currentCharIndex);
         unawaited(_storageService.savePosition(_currentCharIndex));
         notifyListeners();
       });
@@ -124,6 +142,34 @@ class TtsService extends ChangeNotifier {
       _errorMessage =
           'No Android text-to-speech engine is available on this device yet.';
     }
+  }
+
+  Future<void> _configureAudioSession() async {
+    final session = await AudioSession.instance;
+    await session.configure(AudioSessionConfiguration.speech());
+    _audioSession = session;
+
+    _interruptionSubscription =
+        session.interruptionEventStream.listen((event) {
+      if (!event.begin || !isPlaying) {
+        return;
+      }
+
+      switch (event.type) {
+        case AudioInterruptionType.pause:
+        case AudioInterruptionType.unknown:
+          unawaited(pause());
+        case AudioInterruptionType.duck:
+          break;
+      }
+    });
+
+    _becomingNoisySubscription =
+        session.becomingNoisyEventStream.listen((_) {
+      if (isPlaying) {
+        unawaited(pause());
+      }
+    });
   }
 
   Future<void> _loadVoices() async {
@@ -466,14 +512,6 @@ class TtsService extends ChangeNotifier {
       return;
     }
 
-    _errorMessage = null;
-    final localSession = ++_sessionId;
-    _playbackState = ReaderPlaybackState.playing;
-    notifyListeners();
-
-    await _syncTtsOptions();
-    await _flutterTts.stop();
-
     final chunks = _buildChunks(
       _text,
       startOffset: startOffset,
@@ -488,42 +526,161 @@ class TtsService extends ChangeNotifier {
       return;
     }
 
-    for (final chunk in chunks) {
-      if (localSession != _sessionId ||
-          _playbackState != ReaderPlaybackState.playing) {
-        return;
+    if (!await _activateAudioSession()) {
+      _errorMessage =
+          'DhebeVoice could not take audio focus right now. Try again after other audio stops.';
+      _playbackState = ReaderPlaybackState.error;
+      notifyListeners();
+      return;
+    }
+
+    _errorMessage = null;
+    final localSession = ++_sessionId;
+    _playbackState = ReaderPlaybackState.playing;
+    _queuedChunks = chunks;
+    _queuedChunkIndex = 0;
+    _queuedEndOffset = endOffset;
+    _queuedResetPositionOnComplete = resetPositionOnComplete;
+    _queuedTriggerCompletionHandler = triggerCompletionHandler;
+    _activeChunkOffset = chunks.first.start;
+    _currentParagraphIndex = chunks.first.paragraphIndex;
+    notifyListeners();
+
+    await _syncTtsOptions();
+    await _flutterTts.stop();
+
+    final queued = await _queueChunks(chunks, localSession);
+    if (!queued && _isPlaybackSessionActive(localSession)) {
+      await _handlePlaybackError(
+        'DhebeVoice could not start the selected voice. Try another installed voice.',
+      );
+    }
+  }
+
+  Future<bool> _queueChunks(List<_SpeechChunk> chunks, int sessionId) async {
+    await _flutterTts.setQueueMode(0);
+    final firstResult = await _flutterTts.speak(
+      chunks.first.text,
+      focus: true,
+    );
+    if (!_isPlaybackSessionActive(sessionId)) {
+      await _flutterTts.setQueueMode(0);
+      return false;
+    }
+    if (firstResult != 1) {
+      await _flutterTts.setQueueMode(0);
+      return false;
+    }
+
+    if (chunks.length == 1) {
+      await _flutterTts.setQueueMode(0);
+      return true;
+    }
+
+    await _flutterTts.setQueueMode(1);
+    for (final chunk in chunks.skip(1)) {
+      if (!_isPlaybackSessionActive(sessionId)) {
+        await _flutterTts.setQueueMode(0);
+        return false;
       }
 
-      _activeChunkOffset = chunk.start;
-      _currentParagraphIndex = chunk.paragraphIndex;
-      notifyListeners();
-
-      final result = await _flutterTts.speak(chunk.text);
+      final result = await _flutterTts.speak(
+        chunk.text,
+        focus: true,
+      );
       if (result != 1) {
-        _playbackState = ReaderPlaybackState.error;
-        _errorMessage =
-            'DhebeVoice could not start the selected voice. Try another installed voice.';
-        notifyListeners();
-        return;
+        await _flutterTts.setQueueMode(0);
+        return false;
       }
-
-      _currentCharIndex = chunk.end;
-      await _storageService.savePosition(_currentCharIndex);
     }
 
-    if (localSession == _sessionId) {
-      _playbackState = ReaderPlaybackState.completed;
-      _currentCharIndex = resetPositionOnComplete
-          ? 0
-          : min(endOffset ?? _currentCharIndex, _text.length);
-      _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
-      await _storageService.savePosition(_currentCharIndex);
+    await _flutterTts.setQueueMode(0);
+    return true;
+  }
+
+  Future<void> _handleChunkCompleted() async {
+    if (_queuedChunks.isEmpty) {
+      return;
+    }
+
+    final completedIndex = min(_queuedChunkIndex, _queuedChunks.length - 1);
+    final completedChunk = _queuedChunks[completedIndex];
+    _currentCharIndex = completedChunk.end;
+    _currentParagraphIndex = completedChunk.paragraphIndex;
+    await _storageService.savePosition(_currentCharIndex);
+
+    if (completedIndex < _queuedChunks.length - 1) {
+      _queuedChunkIndex = completedIndex + 1;
+      final nextChunk = _queuedChunks[_queuedChunkIndex];
+      _activeChunkOffset = nextChunk.start;
+      _currentParagraphIndex = nextChunk.paragraphIndex;
       notifyListeners();
-      final handler = _playbackCompletedHandler;
-      if (triggerCompletionHandler && handler != null) {
-        unawaited(handler());
-      }
+      return;
     }
+
+    final triggerCompletionHandler = _queuedTriggerCompletionHandler;
+    final resetPositionOnComplete = _queuedResetPositionOnComplete;
+    final finalOffset = _queuedEndOffset ?? _queuedChunks.last.end;
+
+    _queuedChunks = const [];
+    _queuedChunkIndex = 0;
+    _queuedEndOffset = null;
+    await _audioSession?.setActive(false);
+
+    _playbackState = ReaderPlaybackState.completed;
+    _currentCharIndex =
+        resetPositionOnComplete ? 0 : min(finalOffset, _text.length);
+    _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
+    await _storageService.savePosition(_currentCharIndex);
+    notifyListeners();
+
+    final handler = _playbackCompletedHandler;
+    if (triggerCompletionHandler && handler != null) {
+      unawaited(handler());
+    }
+  }
+
+  Future<void> _handlePlaybackError(dynamic message) async {
+    if (_playbackState == ReaderPlaybackState.paused ||
+        _playbackState == ReaderPlaybackState.stopped) {
+      return;
+    }
+
+    _queuedChunks = const [];
+    _queuedChunkIndex = 0;
+    _queuedEndOffset = null;
+    await _audioSession?.setActive(false);
+
+    _playbackState = ReaderPlaybackState.error;
+    _errorMessage = _friendlyPlaybackError(message);
+    notifyListeners();
+  }
+
+  String _friendlyPlaybackError(dynamic message) {
+    final raw = message?.toString().trim() ?? '';
+    if (raw.isEmpty) {
+      return 'DhebeVoice could not continue playback. Try another installed voice.';
+    }
+    if (raw.toLowerCase().contains('selected voice')) {
+      return raw;
+    }
+    if (raw.toLowerCase().contains('error from texttospeech')) {
+      return 'DhebeVoice could not continue with the selected voice. Try another installed voice.';
+    }
+    return raw;
+  }
+
+  Future<bool> _activateAudioSession() async {
+    final session = _audioSession;
+    if (session == null) {
+      return true;
+    }
+    return session.setActive(true);
+  }
+
+  bool _isPlaybackSessionActive(int sessionId) {
+    return sessionId == _sessionId &&
+        _playbackState == ReaderPlaybackState.playing;
   }
 
   Future<void> pause() async {
@@ -532,18 +689,26 @@ class TtsService extends ChangeNotifier {
     }
 
     _sessionId++;
+    _queuedChunks = const [];
+    _queuedChunkIndex = 0;
+    _queuedEndOffset = null;
     _playbackState = ReaderPlaybackState.paused;
     await _flutterTts.stop();
+    await _audioSession?.setActive(false);
     await _storageService.savePosition(_currentCharIndex);
     notifyListeners();
   }
 
   Future<void> stop() async {
     _sessionId++;
+    _queuedChunks = const [];
+    _queuedChunkIndex = 0;
+    _queuedEndOffset = null;
     _playbackState = ReaderPlaybackState.stopped;
     _currentCharIndex = 0;
     _currentParagraphIndex = 0;
     await _flutterTts.stop();
+    await _audioSession?.setActive(false);
     await _storageService.savePosition(0);
     notifyListeners();
   }
@@ -699,6 +864,14 @@ class TtsService extends ChangeNotifier {
       chunks.add(buffer);
     }
     return chunks;
+  }
+
+  @override
+  void dispose() {
+    _interruptionSubscription?.cancel();
+    _becomingNoisySubscription?.cancel();
+    unawaited(_flutterTts.stop());
+    super.dispose();
   }
 }
 

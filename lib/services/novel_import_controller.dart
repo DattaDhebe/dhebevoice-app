@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/novel_book.dart';
+import 'file_import_service.dart';
 import 'novel_library_service.dart';
 import 'storage_service.dart';
 import 'tts_service.dart';
@@ -9,10 +10,12 @@ import 'web_novel_import_service.dart';
 class NovelImportController extends ChangeNotifier {
   NovelImportController({
     required StorageService storageService,
+    required FileImportService fileImportService,
     required NovelLibraryService novelLibraryService,
     required WebNovelImportService webNovelImportService,
     required TtsService ttsService,
   })  : _storageService = storageService,
+        _fileImportService = fileImportService,
         _novelLibraryService = novelLibraryService,
         _webNovelImportService = webNovelImportService,
         _ttsService = ttsService {
@@ -20,6 +23,7 @@ class NovelImportController extends ChangeNotifier {
   }
 
   final StorageService _storageService;
+  final FileImportService _fileImportService;
   final NovelLibraryService _novelLibraryService;
   final WebNovelImportService _webNovelImportService;
   final TtsService _ttsService;
@@ -80,6 +84,50 @@ class NovelImportController extends ChangeNotifier {
 
     await clearActiveNovel();
     await _ttsService.handleSharedText(trimmed);
+  }
+
+  Future<void> importLocalFile() async {
+    _errorMessage = null;
+    _importStatus = null;
+    notifyListeners();
+
+    try {
+      final imported = await _fileImportService.importReaderFile();
+      if (imported == null) {
+        return;
+      }
+
+      switch (imported.kind) {
+        case ImportedReaderFileKind.text:
+          await clearActiveNovel();
+          await _ttsService.stop();
+          await _ttsService.updateText(imported.text!, resetPosition: true);
+          _importStatus = 'Imported text file ${imported.name}.';
+          break;
+        case ImportedReaderFileKind.epub:
+          final book = imported.book!;
+          final updated = [..._library];
+          final existingIndex = updated.indexWhere(
+            (entry) => entry.sourceUrl == book.sourceUrl,
+          );
+          if (existingIndex >= 0) {
+            updated[existingIndex] = book;
+          } else {
+            updated.insert(0, book);
+          }
+
+          _library = updated;
+          await _novelLibraryService.saveLibrary(updated);
+          await selectNovel(book.id, chapterIndex: 0);
+          _importStatus =
+              'Imported EPUB ${book.title} with ${book.chapters.length} chapters.';
+          break;
+      }
+    } catch (error) {
+      _errorMessage = error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      notifyListeners();
+    }
   }
 
   bool _looksLikeUrl(String value) {

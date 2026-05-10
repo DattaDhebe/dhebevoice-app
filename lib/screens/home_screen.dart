@@ -313,10 +313,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               IconButton(
-                tooltip: 'Import .txt file',
+                tooltip: 'Import .txt or .epub file',
                 onPressed: () async {
-                  await importer.clearActiveNovel();
-                  await ttsService.importTextFile();
+                  await importer.importLocalFile();
                 },
                 icon: const Icon(Icons.upload_file),
               ),
@@ -398,7 +397,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                             decoration: const InputDecoration(
                               hintText:
-                                  'Paste text here, import a .txt file, or share a novel link from your browser.',
+                                  'Paste text here, import a .txt or .epub file, or share a novel link from your browser.',
                               border: InputBorder.none,
                               filled: false,
                               contentPadding: EdgeInsets.zero,
@@ -572,7 +571,9 @@ class _HeaderCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Language: ${ttsService.selectedLanguage} | Voice: ${ttsService.selectedVoice?.label ?? 'Not selected'}',
+                    ttsService.paragraphCount == 0
+                        ? 'Ready for pasted text, local files, or web chapters.'
+                        : 'Paragraph ${ttsService.currentParagraphIndex + 1} of ${ttsService.paragraphCount}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
