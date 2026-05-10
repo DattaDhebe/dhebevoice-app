@@ -18,22 +18,47 @@ class PlayerControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final filledStyle = FilledButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    final outlinedStyle = OutlinedButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
     final playButton = FilledButton.tonalIcon(
+      style: filledStyle,
       onPressed: isPlaying ? null : onPlay,
       icon: Icon(
         canResume ? Icons.play_circle_fill : Icons.play_arrow,
       ),
-      label: Text(canResume ? 'Resume' : 'Play'),
+      label: Text(
+        canResume ? 'Resume' : 'Play',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
     final pauseButton = OutlinedButton.icon(
+      style: outlinedStyle,
       onPressed: isPlaying ? onPause : null,
       icon: const Icon(Icons.pause),
-      label: const Text('Pause'),
+      label: const Text(
+        'Pause',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
     final stopButton = OutlinedButton.icon(
+      style: outlinedStyle,
       onPressed: onStop,
       icon: const Icon(Icons.stop),
-      label: const Text('Stop'),
+      label: const Text(
+        'Stop',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
 
     return SafeArea(
@@ -45,31 +70,14 @@ class PlayerControls extends StatelessWidget {
           borderRadius: BorderRadius.circular(28),
           border: Border.all(color: Colors.white10),
         ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth < 420) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  playButton,
-                  const SizedBox(height: 12),
-                  pauseButton,
-                  const SizedBox(height: 12),
-                  stopButton,
-                ],
-              );
-            }
-
-            return Row(
-              children: [
-                Expanded(child: playButton),
-                const SizedBox(width: 12),
-                Expanded(child: pauseButton),
-                const SizedBox(width: 12),
-                Expanded(child: stopButton),
-              ],
-            );
-          },
+        child: Row(
+          children: [
+            Expanded(flex: 11, child: playButton),
+            const SizedBox(width: 8),
+            Expanded(flex: 10, child: pauseButton),
+            const SizedBox(width: 8),
+            Expanded(flex: 9, child: stopButton),
+          ],
         ),
       ),
     );

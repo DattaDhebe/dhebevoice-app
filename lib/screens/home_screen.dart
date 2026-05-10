@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
+import '../models/novel_book.dart';
 import '../services/novel_import_controller.dart';
 import '../services/tts_service.dart';
 import '../widgets/player_controls.dart';
@@ -150,9 +151,10 @@ class _HomeScreenState extends State<HomeScreen> {
               itemCount: novel.chapters.length,
               itemBuilder: (context, index) {
                 final chapter = novel.chapters[index];
+                final chapterBadge = _chapterBadgeLabel(chapter, index);
                 return ListTile(
                   selected: index == importer.activeChapterIndex,
-                  leading: CircleAvatar(child: Text('${index + 1}')),
+                  leading: _ChapterBadge(label: chapterBadge),
                   title: Text(chapter.title),
                   onTap: () {
                     Navigator.of(context).pop();
@@ -181,6 +183,26 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return null;
+  }
+
+  String _chapterBadgeLabel(NovelChapter chapter, int index) {
+    final chapterNumber = _extractChapterNumber(chapter.title) ??
+        _extractChapterNumber(chapter.url) ??
+        (index + 1);
+    return '#$chapterNumber';
+  }
+
+  int? _extractChapterNumber(String value) {
+    final match = RegExp(
+      r'(?:chapter|chap|episode|ep|part)[\s\-_:]*(\d+)',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (match != null) {
+      return int.tryParse(match.group(1) ?? '');
+    }
+
+    final fallback = RegExp(r'(\d+)').firstMatch(value);
+    return fallback == null ? null : int.tryParse(fallback.group(1) ?? '');
   }
 
   void _syncImportDialog(NovelImportController importer) {
@@ -346,6 +368,29 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ChapterBadge extends StatelessWidget {
+  const _ChapterBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 58),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelLarge,
+      ),
     );
   }
 }
@@ -534,6 +579,11 @@ class _ActiveNovelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final novel = importer.activeNovel!;
     final chapter = importer.activeChapter;
+    final actionStyle = FilledButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
 
     return Card(
       child: Padding(
@@ -560,31 +610,53 @@ class _ActiveNovelCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 16),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
+            Row(
               children: [
-                FilledButton.tonalIcon(
-                  onPressed: importer.activeChapterIndex > 0
-                      ? importer.goToPreviousChapter
-                      : null,
-                  icon: const Icon(Icons.chevron_left),
-                  label: const Text('Prev'),
+                Expanded(
+                  flex: 9,
+                  child: FilledButton.tonalIcon(
+                    style: actionStyle,
+                    onPressed: importer.activeChapterIndex > 0
+                        ? importer.goToPreviousChapter
+                        : null,
+                    icon: const Icon(Icons.chevron_left),
+                    label: const Text(
+                      'Prev',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 10),
-                FilledButton.tonalIcon(
-                  onPressed: onOpenChapters,
-                  icon: const Icon(Icons.menu_book),
-                  label: const Text('Chapters'),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 12,
+                  child: FilledButton.tonalIcon(
+                    style: actionStyle,
+                    onPressed: onOpenChapters,
+                    icon: const Icon(Icons.menu_book),
+                    label: const Text(
+                      'Chapters',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 10),
-                FilledButton.tonalIcon(
-                  onPressed:
-                      importer.activeChapterIndex < novel.chapters.length - 1
-                          ? importer.goToNextChapter
-                          : null,
-                  icon: const Icon(Icons.chevron_right),
-                  label: const Text('Next'),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 9,
+                  child: FilledButton.tonalIcon(
+                    style: actionStyle,
+                    onPressed:
+                        importer.activeChapterIndex < novel.chapters.length - 1
+                            ? importer.goToNextChapter
+                            : null,
+                    icon: const Icon(Icons.chevron_right),
+                    label: const Text(
+                      'Next',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
               ],
             ),
