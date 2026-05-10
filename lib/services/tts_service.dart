@@ -339,7 +339,7 @@ class TtsService extends ChangeNotifier {
       if (result != 1) {
         _playbackState = ReaderPlaybackState.error;
         _errorMessage =
-            'Text Reader could not start the selected voice. Try another installed voice.';
+            'DhebeVoice could not start the selected voice. Try another installed voice.';
         notifyListeners();
         return;
       }

@@ -31,7 +31,7 @@ class WebNovelImportService {
 
     if (chapters.isEmpty) {
       throw Exception(
-        'Text Reader could not detect readable chapter content on this page.',
+        'DhebeVoice could not detect readable chapter content on this page.',
       );
     }
 

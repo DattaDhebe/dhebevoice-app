@@ -65,7 +65,7 @@ class TextReaderApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Text Reader',
+        title: 'DhebeVoice',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,

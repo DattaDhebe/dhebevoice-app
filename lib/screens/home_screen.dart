@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Text Reader'),
+            title: const Text('DhebeVoice'),
             actions: [
               IconButton(
                 tooltip: 'Import web link',
@@ -397,7 +397,7 @@ class _ImportStatusCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(importer.importStatus!),
             ],
-            if (importer.importProgress != null) ...[
+            if (importer.isImporting || importer.importProgress != null) ...[
               const SizedBox(height: 14),
               LinearProgressIndicator(value: importer.importProgress),
             ],
