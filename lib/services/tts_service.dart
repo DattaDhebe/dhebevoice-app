@@ -12,6 +12,12 @@ import 'storage_service.dart';
 enum ReaderPlaybackState { idle, playing, paused, stopped, completed, error }
 
 class TtsService extends ChangeNotifier {
+  static const _defaultLanguage = 'en-IN';
+  static const _defaultVoicePattern = 'en-in-x-ene-local';
+  static const _defaultSpeechRate = 0.48;
+  static const _defaultPitch = 1.0;
+  static const _defaultVolume = 1.0;
+
   TtsService({
     required StorageService storageService,
     required FileImportService fileImportService,
@@ -25,11 +31,11 @@ class TtsService extends ChangeNotifier {
   List<VoiceModel> _voices = const [];
   ReaderPlaybackState _playbackState = ReaderPlaybackState.idle;
   String _text = '';
-  String _selectedLanguage = 'en-IN';
+  String _selectedLanguage = _defaultLanguage;
   VoiceModel? _selectedVoice;
-  double _speechRate = 0.48;
-  double _pitch = 1.0;
-  double _volume = 1.0;
+  double _speechRate = _defaultSpeechRate;
+  double _pitch = _defaultPitch;
+  double _volume = _defaultVolume;
   String? _errorMessage;
   int _currentCharIndex = 0;
   int _currentParagraphIndex = 0;
@@ -148,7 +154,7 @@ class TtsService extends ChangeNotifier {
     final storedVoiceLocale = _storageService.voiceLocale;
     final defaultLanguage = _preferredLanguageFromVoices();
 
-    _selectedLanguage = storedLanguage ?? defaultLanguage ?? 'en-IN';
+    _selectedLanguage = storedLanguage ?? defaultLanguage ?? _defaultLanguage;
 
     _selectedVoice = _voices.cast<VoiceModel?>().firstWhere(
           (voice) => voice!.matchesIdentity(storedVoiceName, storedVoiceLocale),
@@ -161,6 +167,14 @@ class TtsService extends ChangeNotifier {
   }
 
   String? _preferredLanguageFromVoices() {
+    final exactEnglishIndia = _voices.firstWhere(
+      (voice) => _normalizeLocale(voice.locale) == _normalizeLocale(_defaultLanguage),
+      orElse: () => const VoiceModel(name: '', locale: '', label: ''),
+    );
+    if (exactEnglishIndia.locale.isNotEmpty) {
+      return exactEnglishIndia.locale;
+    }
+
     final preferred = _voices
         .where((voice) => _isEnglishIndia(voice.locale))
         .map((voice) => voice.locale)
@@ -176,25 +190,86 @@ class TtsService extends ChangeNotifier {
       return null;
     }
 
-    for (final voice in _voices) {
-      if (voice.locale.toLowerCase() == language.toLowerCase()) {
-        return voice;
+    final normalizedLanguage = _normalizeLocale(language);
+    final candidates = _voices.where((voice) {
+      final voiceLocale = _normalizeLocale(voice.locale);
+      return voiceLocale == normalizedLanguage ||
+          voiceLocale.startsWith('$normalizedLanguage-');
+    }).toList();
+
+    if (candidates.isEmpty) {
+      if (_isEnglishIndia(language)) {
+        return _voices.firstWhere(
+          (voice) => _isEnglishIndia(voice.locale),
+          orElse: () => _voices.first,
+        );
       }
+      return _voices.first;
     }
 
-    if (_isEnglishIndia(language)) {
-      return _voices.firstWhere(
-        (voice) => _isEnglishIndia(voice.locale),
-        orElse: () => _voices.first,
-      );
-    }
-
-    return _voices.first;
+    candidates.sort((a, b) {
+      return _voicePreferenceScore(
+        b,
+        normalizedLanguage,
+      ).compareTo(_voicePreferenceScore(a, normalizedLanguage));
+    });
+    return candidates.first;
   }
 
   bool _isEnglishIndia(String locale) {
-    final normalized = locale.toLowerCase().replaceAll('_', '-');
+    final normalized = _normalizeLocale(locale);
     return normalized == 'en-in' || normalized.startsWith('en-in-');
+  }
+
+  String _normalizeLocale(String locale) {
+    return locale.toLowerCase().replaceAll('_', '-');
+  }
+
+  String _normalizeVoiceName(String name) {
+    return name.toLowerCase().replaceAll('_', '-');
+  }
+
+  int _voicePreferenceScore(VoiceModel voice, String normalizedLanguage) {
+    final normalizedLocale = _normalizeLocale(voice.locale);
+    final normalizedName = _normalizeVoiceName(voice.name);
+    var score = 0;
+
+    if (normalizedLocale == normalizedLanguage) {
+      score += 1000;
+    }
+    if (normalizedLocale.startsWith('$normalizedLanguage-')) {
+      score += 250;
+    }
+
+    if (normalizedLanguage == _normalizeLocale(_defaultLanguage)) {
+      if (normalizedName.contains(_defaultVoicePattern)) {
+        score += 5000;
+      }
+      if (normalizedName.contains('en-in-x-ene')) {
+        score += 4000;
+      }
+      if (normalizedName.contains('en-in-x')) {
+        score += 3000;
+      }
+      if (normalizedName.contains('local')) {
+        score += 300;
+      }
+      if (normalizedName.contains('google')) {
+        score += 200;
+      }
+    }
+
+    for (final label in voice.metadataLabels) {
+      final normalizedLabel = label.toLowerCase();
+      if (normalizedLabel.contains('high')) {
+        score += 80;
+      }
+      if (normalizedLabel.contains('low')) {
+        score -= 10;
+      }
+    }
+
+    return score;
   }
 
   Future<void> _syncTtsOptions() async {
@@ -287,6 +362,27 @@ class TtsService extends ChangeNotifier {
     _volume = value;
     await _storageService.saveVolume(value);
     await _flutterTts.setVolume(value);
+    notifyListeners();
+  }
+
+  Future<void> resetSettings() async {
+    _selectedLanguage = _preferredLanguageFromVoices() ?? _defaultLanguage;
+    _selectedVoice = _defaultVoiceForLanguage(_selectedLanguage);
+    _speechRate = _defaultSpeechRate;
+    _pitch = _defaultPitch;
+    _volume = _defaultVolume;
+    _errorMessage = null;
+
+    await _storageService.resetTtsSettings();
+    await _storageService.saveLanguage(_selectedLanguage);
+    await _storageService.saveVoice(
+      _selectedVoice?.name,
+      _selectedVoice?.locale,
+    );
+    await _storageService.saveRate(_speechRate);
+    await _storageService.savePitch(_pitch);
+    await _storageService.saveVolume(_volume);
+    await _syncTtsOptions();
     notifyListeners();
   }
 

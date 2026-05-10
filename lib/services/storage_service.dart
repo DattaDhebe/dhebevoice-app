@@ -48,6 +48,15 @@ class StorageService {
   Future<void> savePitch(double value) => _prefs.setDouble(_pitchKey, value);
   Future<void> saveVolume(double value) => _prefs.setDouble(_volumeKey, value);
   Future<void> savePosition(int value) => _prefs.setInt(_positionKey, value);
+  Future<void> resetTtsSettings() async {
+    await _prefs.remove(_languageKey);
+    await _prefs.remove(_voiceNameKey);
+    await _prefs.remove(_voiceLocaleKey);
+    await _prefs.remove(_rateKey);
+    await _prefs.remove(_pitchKey);
+    await _prefs.remove(_volumeKey);
+  }
+
   Future<void> saveActiveNovelId(String? value) async {
     if (value == null || value.isEmpty) {
       await _prefs.remove(_activeNovelIdKey);

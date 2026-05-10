@@ -798,7 +798,7 @@ class _NowReadingCard extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: onOpenParagraphs,
                   icon: const Icon(Icons.format_list_numbered),
-                  label: const Text('Choose paragraph'),
+                  label: const Text('Play from paragraph'),
                 ),
               ),
             ],
