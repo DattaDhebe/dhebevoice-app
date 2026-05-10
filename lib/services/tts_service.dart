@@ -592,7 +592,7 @@ class TtsService extends ChangeNotifier {
     await _flutterTts.setQueueMode(0);
     final firstResult = await _flutterTts.speak(
       chunks.first.text,
-      focus: true,
+      focus: false,
     );
     if (!_isPlaybackSessionActive(sessionId)) {
       await _flutterTts.setQueueMode(0);
@@ -617,7 +617,7 @@ class TtsService extends ChangeNotifier {
 
       final result = await _flutterTts.speak(
         chunk.text,
-        focus: true,
+        focus: false,
       );
       if (result != 1) {
         await _flutterTts.setQueueMode(0);
