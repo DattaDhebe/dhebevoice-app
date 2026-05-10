@@ -120,6 +120,17 @@ class TtsService extends ChangeNotifier {
         unawaited(_handleChunkCompleted());
       });
 
+      _flutterTts.setPauseHandler(() {
+        _playbackState = ReaderPlaybackState.paused;
+        notifyListeners();
+      });
+
+      _flutterTts.setContinueHandler(() {
+        _playbackState = ReaderPlaybackState.playing;
+        _errorMessage = null;
+        notifyListeners();
+      });
+
       _flutterTts.setErrorHandler((message) {
         unawaited(_handlePlaybackError(message));
       });
@@ -504,7 +515,7 @@ class TtsService extends ChangeNotifier {
       endOffset: _queuedEndOffset,
       triggerCompletionHandler: _queuedTriggerCompletionHandler,
       resetPositionOnComplete: _queuedResetPositionOnComplete,
-      shouldStopBeforeQueueing: true,
+      shouldStopBeforeQueueing: false,
     );
   }
 
@@ -731,7 +742,8 @@ class TtsService extends ChangeNotifier {
     );
     _currentCharIndex = _pausedCharIndex;
     _playbackState = ReaderPlaybackState.paused;
-    await _flutterTts.stop();
+    _errorMessage = null;
+    await _flutterTts.pause();
     await _storageService.savePosition(_currentCharIndex);
     notifyListeners();
   }
