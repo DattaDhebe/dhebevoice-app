@@ -35,6 +35,7 @@ class TtsService extends ChangeNotifier {
   int _sessionId = 0;
   int _activeChunkOffset = 0;
   bool _engineReady = false;
+  Future<void> Function()? _playbackCompletedHandler;
 
   List<VoiceModel> get voices => _voices;
   ReaderPlaybackState get playbackState => _playbackState;
@@ -50,6 +51,10 @@ class TtsService extends ChangeNotifier {
 
   bool get isPlaying => _playbackState == ReaderPlaybackState.playing;
   bool get isPaused => _playbackState == ReaderPlaybackState.paused;
+
+  void setPlaybackCompletedHandler(Future<void> Function()? handler) {
+    _playbackCompletedHandler = handler;
+  }
 
   String get currentParagraph {
     final paragraphs = _paragraphsFromText(_text);
@@ -354,6 +359,10 @@ class TtsService extends ChangeNotifier {
       _currentParagraphIndex = 0;
       await _storageService.savePosition(0);
       notifyListeners();
+      final handler = _playbackCompletedHandler;
+      if (handler != null) {
+        unawaited(handler());
+      }
     }
   }
 

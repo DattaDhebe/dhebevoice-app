@@ -399,6 +399,19 @@ class _ImportProgressDialog extends StatelessWidget {
                 ],
               ),
             ),
+            actions: [
+              TextButton.icon(
+                onPressed: importer.isCancellingImport
+                    ? null
+                    : () => unawaited(importer.cancelImport()),
+                icon: const Icon(Icons.stop_circle_outlined),
+                label: Text(
+                  importer.isCancellingImport
+                      ? 'Stopping...'
+                      : 'Stop download',
+                ),
+              ),
+            ],
           );
         },
       ),

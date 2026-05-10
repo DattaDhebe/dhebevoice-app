@@ -15,7 +15,9 @@ class NovelImportController extends ChangeNotifier {
   })  : _storageService = storageService,
         _novelLibraryService = novelLibraryService,
         _webNovelImportService = webNovelImportService,
-        _ttsService = ttsService;
+        _ttsService = ttsService {
+    _ttsService.setPlaybackCompletedHandler(_handlePlaybackCompleted);
+  }
 
   final StorageService _storageService;
   final NovelLibraryService _novelLibraryService;
@@ -26,6 +28,7 @@ class NovelImportController extends ChangeNotifier {
   NovelBook? _activeNovel;
   int _activeChapterIndex = 0;
   bool _isImporting = false;
+  bool _isCancellingImport = false;
   String? _importStatus;
   String? _errorMessage;
   double? _importProgress;
@@ -34,6 +37,7 @@ class NovelImportController extends ChangeNotifier {
   NovelBook? get activeNovel => _activeNovel;
   int get activeChapterIndex => _activeChapterIndex;
   bool get isImporting => _isImporting;
+  bool get isCancellingImport => _isCancellingImport;
   String? get importStatus => _importStatus;
   String? get errorMessage => _errorMessage;
   double? get importProgress => _importProgress;
@@ -89,13 +93,14 @@ class NovelImportController extends ChangeNotifier {
 
   Future<void> importNovelFromUrl(String url) async {
     _isImporting = true;
+    _isCancellingImport = false;
     _importStatus = 'Connecting to source...';
     _importProgress = null;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final imported = await _webNovelImportService.importNovelFromUrl(
+      final result = await _webNovelImportService.importNovelResultFromUrl(
         url,
         onProgress: (current, total, status) {
           _importStatus = status;
@@ -104,28 +109,50 @@ class NovelImportController extends ChangeNotifier {
               : current / total;
           notifyListeners();
         },
+        shouldCancel: () => _isCancellingImport,
       );
 
-      final updated = [..._library];
-      final existingIndex = updated.indexWhere(
-        (book) => book.sourceUrl == imported.sourceUrl,
-      );
-      if (existingIndex >= 0) {
-        updated[existingIndex] = imported;
-      } else {
-        updated.insert(0, imported);
+      final imported = result.book;
+      if (imported != null) {
+        final updated = [..._library];
+        final existingIndex = updated.indexWhere(
+          (book) => book.sourceUrl == imported.sourceUrl,
+        );
+        if (existingIndex >= 0) {
+          updated[existingIndex] = imported;
+        } else {
+          updated.insert(0, imported);
+        }
+        _library = updated;
+        await _novelLibraryService.saveLibrary(updated);
+        await selectNovel(imported.id, chapterIndex: 0);
       }
-      _library = updated;
-      await _novelLibraryService.saveLibrary(updated);
-      await selectNovel(imported.id, chapterIndex: 0);
-      _importStatus = 'Imported ${imported.chapters.length} chapters';
+
+      if (result.wasCancelled) {
+        _importStatus = imported == null
+            ? 'Import stopped.'
+            : 'Stopped after ${imported.chapters.length} chapters.';
+      } else if (imported != null) {
+        _importStatus = 'Imported ${imported.chapters.length} chapters.';
+      }
     } catch (error) {
       _errorMessage = error.toString().replaceFirst('Exception: ', '');
     } finally {
       _isImporting = false;
+      _isCancellingImport = false;
       _importProgress = null;
       notifyListeners();
     }
+  }
+
+  Future<void> cancelImport() async {
+    if (!_isImporting || _isCancellingImport) {
+      return;
+    }
+
+    _isCancellingImport = true;
+    _importStatus = 'Stopping import after the current chapter...';
+    notifyListeners();
   }
 
   Future<void> selectNovel(String novelId, {int? chapterIndex}) async {
@@ -227,5 +254,19 @@ class NovelImportController extends ChangeNotifier {
     }
 
     await _novelLibraryService.saveLibrary(_library);
+  }
+
+  Future<void> _handlePlaybackCompleted() async {
+    final novel = _activeNovel;
+    if (novel == null) {
+      return;
+    }
+    if (_activeChapterIndex >= novel.chapters.length - 1) {
+      return;
+    }
+
+    final nextIndex = _activeChapterIndex + 1;
+    await selectChapter(nextIndex);
+    await _ttsService.play();
   }
 }

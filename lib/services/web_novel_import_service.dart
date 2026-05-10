@@ -19,9 +19,29 @@ class WebNovelImportService {
   Future<NovelBook> importNovelFromUrl(
     String rawUrl, {
     void Function(int current, int? total, String status)? onProgress,
+    bool Function()? shouldCancel,
+  }) async {
+    final result = await importNovelResultFromUrl(
+      rawUrl,
+      onProgress: onProgress,
+      shouldCancel: shouldCancel,
+    );
+    if (result.book != null) {
+      return result.book!;
+    }
+    throw Exception('Import stopped before any chapters were downloaded.');
+  }
+
+  Future<NovelImportResult> importNovelResultFromUrl(
+    String rawUrl, {
+    void Function(int current, int? total, String status)? onProgress,
+    bool Function()? shouldCancel,
   }) async {
     final startingUri = _normalizeUri(rawUrl);
     final firstPage = await _fetchPage(startingUri);
+    if (_shouldStop(shouldCancel)) {
+      return const NovelImportResult(wasCancelled: true);
+    }
     final firstContent = _extractReadableText(firstPage.document);
     final looksLikeChapter = _looksLikeChapterPage(firstContent);
 
@@ -35,22 +55,37 @@ class WebNovelImportService {
     }
 
     final chapters = looksLikeChapter
-        ? await _crawlChapterSequence(firstPage, onProgress: onProgress)
-        : await _crawlChapterIndex(firstPage, onProgress: onProgress);
+        ? await _crawlChapterSequence(
+            firstPage,
+            onProgress: onProgress,
+            shouldCancel: shouldCancel,
+          )
+        : await _crawlChapterIndex(
+            firstPage,
+            onProgress: onProgress,
+            shouldCancel: shouldCancel,
+          );
 
     if (chapters.isEmpty) {
+      if (_shouldStop(shouldCancel)) {
+        return const NovelImportResult(wasCancelled: true);
+      }
       throw Exception(
         'DhebeVoice could not detect readable chapter content on this page.',
       );
     }
 
     final title = _extractBookTitle(firstPage.document, chapters.first.title);
-    return NovelBook(
-      id: '${DateTime.now().millisecondsSinceEpoch}_${startingUri.host.hashCode.abs()}',
-      title: title,
-      sourceUrl: firstPage.uri.toString(),
-      importedAt: DateTime.now(),
-      chapters: chapters,
+    return NovelImportResult(
+      book: NovelBook(
+        id:
+            '${DateTime.now().millisecondsSinceEpoch}_${startingUri.host.hashCode.abs()}',
+        title: title,
+        sourceUrl: firstPage.uri.toString(),
+        importedAt: DateTime.now(),
+        chapters: chapters,
+      ),
+      wasCancelled: _shouldStop(shouldCancel),
     );
   }
 
@@ -83,6 +118,7 @@ class WebNovelImportService {
   Future<List<NovelChapter>> _crawlChapterSequence(
     _FetchedPage firstPage, {
     void Function(int current, int? total, String status)? onProgress,
+    bool Function()? shouldCancel,
   }) async {
     final chapters = <NovelChapter>[];
     final visited = <String>{};
@@ -90,6 +126,10 @@ class WebNovelImportService {
     var index = 0;
 
     while (current != null && chapters.length < _maxChapters) {
+      if (_shouldStop(shouldCancel) && chapters.isNotEmpty) {
+        break;
+      }
+
       final key = current.uri.toString();
       if (!visited.add(key)) {
         break;
@@ -124,6 +164,9 @@ class WebNovelImportService {
       if (nextUri == null) {
         break;
       }
+      if (_shouldStop(shouldCancel)) {
+        break;
+      }
       final nextChapterLabel = _resolveChapterTitle(
         uri: nextUri,
         index: index + 1,
@@ -138,14 +181,23 @@ class WebNovelImportService {
   Future<List<NovelChapter>> _crawlChapterIndex(
     _FetchedPage firstPage, {
     void Function(int current, int? total, String status)? onProgress,
+    bool Function()? shouldCancel,
   }) async {
     final links = _extractChapterLinks(firstPage.document, firstPage.uri);
     if (links.isEmpty) {
-      return _crawlChapterSequence(firstPage, onProgress: onProgress);
+      return _crawlChapterSequence(
+        firstPage,
+        onProgress: onProgress,
+        shouldCancel: shouldCancel,
+      );
     }
 
     final chapters = <NovelChapter>[];
     for (var i = 0; i < links.length && i < _maxChapters; i++) {
+      if (_shouldStop(shouldCancel) && chapters.isNotEmpty) {
+        break;
+      }
+
       final entry = links[i];
       final chapterNumber = i + 1;
       final chapterLabel = _resolveChapterTitle(
@@ -437,6 +489,20 @@ class WebNovelImportService {
   String _normalizeText(String input) {
     return input.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
+
+  bool _shouldStop(bool Function()? shouldCancel) {
+    return shouldCancel?.call() ?? false;
+  }
+}
+
+class NovelImportResult {
+  const NovelImportResult({
+    this.book,
+    this.wasCancelled = false,
+  });
+
+  final NovelBook? book;
+  final bool wasCancelled;
 }
 
 class _FetchedPage {
