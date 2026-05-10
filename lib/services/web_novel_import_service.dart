@@ -25,6 +25,15 @@ class WebNovelImportService {
     final firstContent = _extractReadableText(firstPage.document);
     final looksLikeChapter = _looksLikeChapterPage(firstContent);
 
+    if (looksLikeChapter) {
+      final firstChapterLabel = _resolveChapterTitle(
+        uri: firstPage.uri,
+        index: 1,
+        rawTitle: _extractChapterTitle(firstPage.document, 1),
+      );
+      onProgress?.call(1, null, 'Downloading $firstChapterLabel');
+    }
+
     final chapters = looksLikeChapter
         ? await _crawlChapterSequence(firstPage, onProgress: onProgress)
         : await _crawlChapterIndex(firstPage, onProgress: onProgress);
@@ -91,7 +100,12 @@ class WebNovelImportService {
         break;
       }
 
-      final title = _extractChapterTitle(current.document, index + 1);
+      final chapterNumber = index + 1;
+      final title = _resolveChapterTitle(
+        uri: current.uri,
+        index: chapterNumber,
+        rawTitle: _extractChapterTitle(current.document, chapterNumber),
+      );
       chapters.add(
         NovelChapter(
           title: title,
@@ -101,7 +115,6 @@ class WebNovelImportService {
         ),
       );
       index++;
-      onProgress?.call(index, null, 'Downloaded $title');
 
       final nextUri = _findNextChapterUri(
         current.document,
@@ -111,6 +124,11 @@ class WebNovelImportService {
       if (nextUri == null) {
         break;
       }
+      final nextChapterLabel = _resolveChapterTitle(
+        uri: nextUri,
+        index: index + 1,
+      );
+      onProgress?.call(index + 1, null, 'Downloading $nextChapterLabel');
       current = await _fetchPage(nextUri);
     }
 
@@ -129,15 +147,30 @@ class WebNovelImportService {
     final chapters = <NovelChapter>[];
     for (var i = 0; i < links.length && i < _maxChapters; i++) {
       final entry = links[i];
+      final chapterNumber = i + 1;
+      final chapterLabel = _resolveChapterTitle(
+        uri: entry.uri,
+        index: chapterNumber,
+        rawTitle: entry.text,
+      );
+      onProgress?.call(
+        chapterNumber,
+        links.length,
+        'Downloading $chapterLabel',
+      );
       final page = await _fetchPage(entry.uri);
       final content = _extractReadableText(page.document);
       if (content.trim().isEmpty) {
         continue;
       }
 
-      final title = entry.text.isNotEmpty
-          ? entry.text
-          : _extractChapterTitle(page.document, i + 1);
+      final title = _resolveChapterTitle(
+        uri: page.uri,
+        index: chapterNumber,
+        rawTitle: entry.text.isNotEmpty
+            ? entry.text
+            : _extractChapterTitle(page.document, chapterNumber),
+      );
       chapters.add(
         NovelChapter(
           title: title,
@@ -146,7 +179,6 @@ class WebNovelImportService {
           order: chapters.length,
         ),
       );
-      onProgress?.call(chapters.length, links.length, 'Downloaded $title');
     }
 
     return chapters;
@@ -222,11 +254,71 @@ class WebNovelImportService {
     return _cleanTitle(title, fallback: 'Chapter $index');
   }
 
+  String _resolveChapterTitle({
+    required Uri uri,
+    required int index,
+    String? rawTitle,
+  }) {
+    final cleanedTitle = rawTitle == null
+        ? ''
+        : _cleanTitle(rawTitle, fallback: '');
+    final slugTitle = _titleFromPath(uri);
+
+    if (_looksLikeChapterLabel(cleanedTitle)) {
+      return cleanedTitle;
+    }
+    if (_looksLikeChapterLabel(slugTitle)) {
+      return slugTitle;
+    }
+    if (cleanedTitle.isNotEmpty) {
+      return cleanedTitle;
+    }
+    if (slugTitle.isNotEmpty) {
+      return slugTitle;
+    }
+    return 'Chapter $index';
+  }
+
   String _cleanTitle(String title, {required String fallback}) {
     final normalized = _normalizeText(title)
         .replaceAll(RegExp(r'\s*\|\s*.*$'), '')
         .replaceAll(RegExp(r'\s*-\s*.*$'), '');
     return normalized.isEmpty ? fallback : normalized;
+  }
+
+  bool _looksLikeChapterLabel(String value) {
+    final normalized = value.toLowerCase();
+    return normalized.contains('chapter') ||
+        normalized.contains('episode') ||
+        normalized.contains('prologue') ||
+        normalized.contains('part ');
+  }
+
+  String _titleFromPath(Uri uri) {
+    if (uri.pathSegments.isEmpty) {
+      return '';
+    }
+
+    final slug = uri.pathSegments.last.replaceAll(
+      RegExp(r'\.[a-zA-Z0-9]+$'),
+      '',
+    );
+    final normalized = _normalizeText(slug.replaceAll(RegExp(r'[-_]+'), ' '));
+    if (normalized.isEmpty) {
+      return '';
+    }
+
+    return normalized
+        .split(' ')
+        .map(_titleCaseWord)
+        .join(' ');
+  }
+
+  String _titleCaseWord(String word) {
+    if (word.isEmpty || RegExp(r'^\d+$').hasMatch(word)) {
+      return word;
+    }
+    return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
   }
 
   Uri? _findNextChapterUri(

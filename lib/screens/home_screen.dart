@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _textController;
   StreamSubscription<List<SharedMediaFile>>? _shareSubscription;
+  bool _isImportDialogOpen = false;
 
   @override
   void initState() {
@@ -55,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          scrollable: true,
           title: const Text('Import novel link'),
           content: TextField(
             controller: controller,
@@ -183,6 +185,30 @@ class _HomeScreenState extends State<HomeScreen> {
     return null;
   }
 
+  void _syncImportDialog(NovelImportController importer) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      if (importer.isImporting && !_isImportDialogOpen) {
+        _isImportDialogOpen = true;
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const _ImportProgressDialog(),
+        ).then((_) {
+          _isImportDialogOpen = false;
+        });
+        return;
+      }
+
+      if (!importer.isImporting && _isImportDialogOpen) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    });
+  }
+
   @override
   void dispose() {
     _shareSubscription?.cancel();
@@ -194,6 +220,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Consumer2<NovelImportController, TtsService>(
       builder: (context, importer, ttsService, _) {
+        _syncImportDialog(importer);
+        final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+
         if (_textController.text != ttsService.text) {
           _textController.value = TextEditingValue(
             text: ttsService.text,
@@ -241,72 +270,138 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Column(
-                children: [
-                  _HeaderCard(ttsService: ttsService),
-                  if (importer.isImporting ||
-                      importer.importStatus != null ||
-                      importer.errorMessage != null) ...[
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final editorHeight = isKeyboardOpen
+                    ? 220.0
+                    : (constraints.maxHeight * 0.38).clamp(260.0, 460.0);
+
+                return ListView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  children: [
+                    _HeaderCard(ttsService: ttsService),
+                    if (!importer.isImporting &&
+                        (importer.importStatus != null ||
+                            importer.errorMessage != null)) ...[
+                      const SizedBox(height: 16),
+                      _ImportStatusCard(importer: importer),
+                    ],
+                    if (importer.activeNovel != null) ...[
+                      const SizedBox(height: 16),
+                      _ActiveNovelCard(
+                        importer: importer,
+                        onOpenChapters: _showChapterSheet,
+                      ),
+                    ],
                     const SizedBox(height: 16),
-                    _ImportStatusCard(importer: importer),
-                  ],
-                  if (importer.activeNovel != null) ...[
-                    const SizedBox(height: 16),
-                    _ActiveNovelCard(
-                      importer: importer,
-                      onOpenChapters: _showChapterSheet,
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: TextField(
-                          controller: _textController,
-                          maxLines: null,
-                          expands: true,
-                          textAlignVertical: TextAlignVertical.top,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                height: 1.5,
-                              ),
-                          decoration: const InputDecoration(
-                            hintText:
-                                'Paste text here, import a .txt file, or share a novel link from your browser.',
-                            border: InputBorder.none,
-                            filled: false,
-                            contentPadding: EdgeInsets.zero,
+                    SizedBox(
+                      height: editorHeight,
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: TextField(
+                            controller: _textController,
+                            maxLines: null,
+                            expands: true,
+                            textAlignVertical: TextAlignVertical.top,
+                            style:
+                                Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      height: 1.5,
+                                    ),
+                            decoration: const InputDecoration(
+                              hintText:
+                                  'Paste text here, import a .txt file, or share a novel link from your browser.',
+                              border: InputBorder.none,
+                              filled: false,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            onChanged: (value) {
+                              unawaited(importer.detachIfTextChanged(value));
+                              unawaited(ttsService.updateText(value));
+                            },
                           ),
-                          onChanged: (value) {
-                            unawaited(importer.detachIfTextChanged(value));
-                            unawaited(ttsService.updateText(value));
-                          },
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  _NowReadingCard(
-                    ttsService: ttsService,
-                    chapterLabel: importer.activeChapter?.title,
-                  ),
-                  const SizedBox(height: 16),
-                  PlayerControls(
-                    isPlaying: ttsService.isPlaying,
-                    canResume: ttsService.isPaused ||
-                        ttsService.currentCharIndex > 0,
-                    onPlay: ttsService.play,
-                    onPause: ttsService.pause,
-                    onStop: ttsService.stop,
-                  ),
-                ],
-              ),
+                    if (!isKeyboardOpen) ...[
+                      const SizedBox(height: 16),
+                      _NowReadingCard(
+                        ttsService: ttsService,
+                        chapterLabel: importer.activeChapter?.title,
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    PlayerControls(
+                      isPlaying: ttsService.isPlaying,
+                      canResume: ttsService.isPaused ||
+                          ttsService.currentCharIndex > 0,
+                      onPlay: ttsService.play,
+                      onPause: ttsService.pause,
+                      onStop: ttsService.stop,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _ImportProgressDialog extends StatelessWidget {
+  const _ImportProgressDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Consumer<NovelImportController>(
+        builder: (context, importer, _) {
+          final progressPercent = importer.importProgress == null
+              ? null
+              : (importer.importProgress! * 100).clamp(0, 100).round();
+
+          return AlertDialog(
+            title: const Text('Importing web novel'),
+            content: SizedBox(
+              width: 320,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    importer.importStatus ?? 'Preparing chapters...',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 14),
+                  LinearProgressIndicator(value: importer.importProgress),
+                  if (progressPercent != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      '$progressPercent% complete',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.white70,
+                          ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Following chapter links and downloading text...',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.white70,
+                          ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
