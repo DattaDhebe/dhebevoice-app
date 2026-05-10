@@ -4,28 +4,50 @@ import 'package:provider/provider.dart';
 
 import 'screens/home_screen.dart';
 import 'services/file_import_service.dart';
+import 'services/novel_import_controller.dart';
+import 'services/novel_library_service.dart';
 import 'services/storage_service.dart';
 import 'services/tts_service.dart';
+import 'services/web_novel_import_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final storageService = StorageService();
   await storageService.initialize();
+  final novelLibraryService = NovelLibraryService();
+  final webNovelImportService = WebNovelImportService();
 
   final ttsService = TtsService(
     storageService: storageService,
     fileImportService: FileImportService(),
   );
   await ttsService.initialize();
+  final novelImportController = NovelImportController(
+    storageService: storageService,
+    novelLibraryService: novelLibraryService,
+    webNovelImportService: webNovelImportService,
+    ttsService: ttsService,
+  );
+  await novelImportController.initialize();
 
-  runApp(TextReaderApp(ttsService: ttsService));
+  runApp(
+    TextReaderApp(
+      ttsService: ttsService,
+      novelImportController: novelImportController,
+    ),
+  );
 }
 
 class TextReaderApp extends StatelessWidget {
-  const TextReaderApp({super.key, required this.ttsService});
+  const TextReaderApp({
+    super.key,
+    required this.ttsService,
+    required this.novelImportController,
+  });
 
   final TtsService ttsService;
+  final NovelImportController novelImportController;
 
   @override
   Widget build(BuildContext context) {
@@ -35,8 +57,13 @@ class TextReaderApp extends StatelessWidget {
       surface: const Color(0xFF11161C),
     );
 
-    return ChangeNotifierProvider<TtsService>.value(
-      value: ttsService,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<TtsService>.value(value: ttsService),
+        ChangeNotifierProvider<NovelImportController>.value(
+          value: novelImportController,
+        ),
+      ],
       child: MaterialApp(
         title: 'Text Reader',
         debugShowCheckedModeBanner: false,

@@ -33,6 +33,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   file_picker: ^10.1.9
   flutter_tts: ^4.2.2
+  html: ^0.15.6
+  http: ^1.5.0
+  path_provider: ^2.1.5
   provider: ^6.1.5
   receive_sharing_intent: ^1.8.1
   shared_preferences: ^2.5.3
@@ -40,6 +43,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -89,3 +93,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "app_logo.png"
+  min_sdk_android: 21

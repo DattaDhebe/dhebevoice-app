@@ -9,6 +9,8 @@ class StorageService {
   static const _pitchKey = 'reader_pitch';
   static const _volumeKey = 'reader_volume';
   static const _positionKey = 'reader_position';
+  static const _activeNovelIdKey = 'reader_active_novel_id';
+  static const _activeChapterIndexKey = 'reader_active_chapter_index';
 
   late final SharedPreferences _prefs;
 
@@ -24,6 +26,8 @@ class StorageService {
   double get pitch => _prefs.getDouble(_pitchKey) ?? 1.0;
   double get volume => _prefs.getDouble(_volumeKey) ?? 1.0;
   int get position => _prefs.getInt(_positionKey) ?? 0;
+  String? get activeNovelId => _prefs.getString(_activeNovelIdKey);
+  int get activeChapterIndex => _prefs.getInt(_activeChapterIndexKey) ?? 0;
 
   Future<void> saveText(String value) => _prefs.setString(_textKey, value);
   Future<void> saveLanguage(String value) =>
@@ -44,4 +48,14 @@ class StorageService {
   Future<void> savePitch(double value) => _prefs.setDouble(_pitchKey, value);
   Future<void> saveVolume(double value) => _prefs.setDouble(_volumeKey, value);
   Future<void> savePosition(int value) => _prefs.setInt(_positionKey, value);
+  Future<void> saveActiveNovelId(String? value) async {
+    if (value == null || value.isEmpty) {
+      await _prefs.remove(_activeNovelIdKey);
+      return;
+    }
+    await _prefs.setString(_activeNovelIdKey, value);
+  }
+
+  Future<void> saveActiveChapterIndex(int value) =>
+      _prefs.setInt(_activeChapterIndexKey, value);
 }
