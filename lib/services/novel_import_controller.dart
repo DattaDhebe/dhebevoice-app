@@ -161,19 +161,15 @@ class NovelImportController extends ChangeNotifier {
       return;
     }
 
-    _activeNovel = _library[novelIndex];
-    _activeChapterIndex = chapterIndex ??
-        _activeNovel!.lastReadChapterIndex
-            .clamp(0, _activeNovel!.chapters.length - 1);
+    final novel = _library[novelIndex];
+    final resolvedChapterIndex = chapterIndex ??
+        novel.lastReadChapterIndex.clamp(0, novel.chapters.length - 1);
 
-    await _storageService.saveActiveNovelId(_activeNovel!.id);
-    await _storageService.saveActiveChapterIndex(_activeChapterIndex);
-    await _ttsService.stop();
-    await _ttsService.updateText(
-      _activeNovel!.chapters[_activeChapterIndex].content,
-      resetPosition: true,
+    await _activateChapter(
+      novel: novel,
+      chapterIndex: resolvedChapterIndex,
+      persistLastRead: false,
     );
-    notifyListeners();
   }
 
   Future<void> selectChapter(int chapterIndex) async {
@@ -182,15 +178,11 @@ class NovelImportController extends ChangeNotifier {
       return;
     }
 
-    _activeChapterIndex = chapterIndex;
-    await _storageService.saveActiveChapterIndex(chapterIndex);
-    await _updateLastReadChapter(novel.id, chapterIndex);
-    await _ttsService.stop();
-    await _ttsService.updateText(
-      novel.chapters[chapterIndex].content,
-      resetPosition: true,
+    await _activateChapter(
+      novel: novel,
+      chapterIndex: chapterIndex,
+      persistLastRead: true,
     );
-    notifyListeners();
   }
 
   Future<void> clearActiveNovel() async {
@@ -268,5 +260,27 @@ class NovelImportController extends ChangeNotifier {
     final nextIndex = _activeChapterIndex + 1;
     await selectChapter(nextIndex);
     await _ttsService.play();
+  }
+
+  Future<void> _activateChapter({
+    required NovelBook novel,
+    required int chapterIndex,
+    required bool persistLastRead,
+  }) async {
+    _activeNovel = novel;
+    _activeChapterIndex = chapterIndex;
+    notifyListeners();
+
+    await _storageService.saveActiveNovelId(novel.id);
+    await _storageService.saveActiveChapterIndex(chapterIndex);
+    if (persistLastRead) {
+      await _updateLastReadChapter(novel.id, chapterIndex);
+    }
+    await _ttsService.stop();
+    await _ttsService.updateText(
+      novel.chapters[chapterIndex].content,
+      resetPosition: true,
+    );
+    notifyListeners();
   }
 }

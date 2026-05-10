@@ -154,11 +154,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   selected: index == importer.activeChapterIndex,
                   leading: CircleAvatar(child: Text('${index + 1}')),
                   title: Text(chapter.title),
-                  onTap: () async {
-                    await importer.selectChapter(index);
-                    if (context.mounted) {
-                      Navigator.of(context).pop();
-                    }
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    unawaited(importer.selectChapter(index));
                   },
                 );
               },
@@ -562,7 +560,9 @@ class _ActiveNovelCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 16),
-            Row(
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
               children: [
                 FilledButton.tonalIcon(
                   onPressed: importer.activeChapterIndex > 0
@@ -606,6 +606,10 @@ class _NowReadingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chapterText = chapterLabel == null || chapterLabel!.trim().isEmpty
+        ? 'Manual text'
+        : chapterLabel!;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -630,7 +634,7 @@ class _NowReadingCard extends StatelessWidget {
             if (chapterLabel != null) ...[
               const SizedBox(height: 8),
               Text(
-                chapterLabel!,
+                chapterText,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.white70,
                     ),

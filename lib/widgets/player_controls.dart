@@ -18,6 +18,24 @@ class PlayerControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final playButton = FilledButton.tonalIcon(
+      onPressed: isPlaying ? null : onPlay,
+      icon: Icon(
+        canResume ? Icons.play_circle_fill : Icons.play_arrow,
+      ),
+      label: Text(canResume ? 'Resume' : 'Play'),
+    );
+    final pauseButton = OutlinedButton.icon(
+      onPressed: isPlaying ? onPause : null,
+      icon: const Icon(Icons.pause),
+      label: const Text('Pause'),
+    );
+    final stopButton = OutlinedButton.icon(
+      onPressed: onStop,
+      icon: const Icon(Icons.stop),
+      label: const Text('Stop'),
+    );
+
     return SafeArea(
       top: false,
       child: Container(
@@ -27,34 +45,31 @@ class PlayerControls extends StatelessWidget {
           borderRadius: BorderRadius.circular(28),
           border: Border.all(color: Colors.white10),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: isPlaying ? null : onPlay,
-                icon: Icon(
-                  canResume ? Icons.play_circle_fill : Icons.play_arrow,
-                ),
-                label: Text(canResume ? 'Resume' : 'Play'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: isPlaying ? onPause : null,
-                icon: const Icon(Icons.pause),
-                label: const Text('Pause'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onStop,
-                icon: const Icon(Icons.stop),
-                label: const Text('Stop'),
-              ),
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 420) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  playButton,
+                  const SizedBox(height: 12),
+                  pauseButton,
+                  const SizedBox(height: 12),
+                  stopButton,
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: playButton),
+                const SizedBox(width: 12),
+                Expanded(child: pauseButton),
+                const SizedBox(width: 12),
+                Expanded(child: stopButton),
+              ],
+            );
+          },
         ),
       ),
     );
