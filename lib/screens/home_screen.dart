@@ -169,6 +169,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showParagraphSheet() {
+    final ttsService = context.read<TtsService>();
+    if (ttsService.paragraphCount == 0) {
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.72,
+            child: ListView.builder(
+              itemCount: ttsService.paragraphCount,
+              itemBuilder: (context, index) {
+                final preview = ttsService.paragraphs[index];
+                return ListTile(
+                  selected: index == ttsService.currentParagraphIndex,
+                  leading: _ChapterBadge(label: '#P${index + 1}'),
+                  title: Text(
+                    'Paragraph ${index + 1}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    preview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    unawaited(ttsService.playFromParagraph(index));
+                  },
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   String? _extractSharedText(List<SharedMediaFile> sharedItems) {
     for (final item in sharedItems) {
       final candidate = switch (item.type) {
@@ -326,10 +370,32 @@ class _HomeScreenState extends State<HomeScreen> {
                             maxLines: null,
                             expands: true,
                             textAlignVertical: TextAlignVertical.top,
-                            style:
+                          style:
                                 Theme.of(context).textTheme.bodyLarge?.copyWith(
                                       height: 1.5,
                                     ),
+                            contextMenuBuilder: (context, editableTextState) {
+                              final selection =
+                                  editableTextState.textEditingValue.selection;
+                              final buttonItems = <ContextMenuButtonItem>[
+                                ...editableTextState.contextMenuButtonItems,
+                                if (selection.isValid && !selection.isCollapsed)
+                                  ContextMenuButtonItem(
+                                    label: 'Play selection',
+                                    onPressed: () {
+                                      ContextMenuController.removeAny();
+                                      unawaited(
+                                        ttsService.playSelection(selection),
+                                      );
+                                    },
+                                  ),
+                              ];
+
+                              return AdaptiveTextSelectionToolbar.buttonItems(
+                                anchors: editableTextState.contextMenuAnchors,
+                                buttonItems: buttonItems,
+                              );
+                            },
                             decoration: const InputDecoration(
                               hintText:
                                   'Paste text here, import a .txt file, or share a novel link from your browser.',
@@ -350,6 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _NowReadingCard(
                         ttsService: ttsService,
                         chapterLabel: importer.activeChapter?.title,
+                        onOpenParagraphs: _showParagraphSheet,
                       ),
                     ],
                     const SizedBox(height: 16),
@@ -671,10 +738,12 @@ class _NowReadingCard extends StatelessWidget {
   const _NowReadingCard({
     required this.ttsService,
     required this.chapterLabel,
+    required this.onOpenParagraphs,
   });
 
   final TtsService ttsService;
   final String? chapterLabel;
+  final VoidCallback onOpenParagraphs;
 
   @override
   Widget build(BuildContext context) {
@@ -722,6 +791,17 @@ class _NowReadingCard extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.88),
                   ),
             ),
+            if (ttsService.paragraphCount > 0) ...[
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: onOpenParagraphs,
+                  icon: const Icon(Icons.format_list_numbered),
+                  label: const Text('Choose paragraph'),
+                ),
+              ),
+            ],
           ],
         ),
       ),

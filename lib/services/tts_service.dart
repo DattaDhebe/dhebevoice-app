@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 import '../models/voice_model.dart';
@@ -48,6 +49,8 @@ class TtsService extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   int get currentCharIndex => _currentCharIndex;
   int get currentParagraphIndex => _currentParagraphIndex;
+  List<String> get paragraphs => List.unmodifiable(_paragraphsFromText(_text));
+  int get paragraphCount => paragraphs.length;
 
   bool get isPlaying => _playbackState == ReaderPlaybackState.playing;
   bool get isPaused => _playbackState == ReaderPlaybackState.paused;
@@ -57,13 +60,13 @@ class TtsService extends ChangeNotifier {
   }
 
   String get currentParagraph {
-    final paragraphs = _paragraphsFromText(_text);
-    if (paragraphs.isEmpty) {
+    final items = paragraphs;
+    if (items.isEmpty) {
       return 'Paste text, import a .txt file, or share text into the app.';
     }
 
-    final index = min(_currentParagraphIndex, paragraphs.length - 1);
-    return paragraphs[index].trim();
+    final index = min(_currentParagraphIndex, items.length - 1);
+    return items[index].trim();
   }
 
   Future<void> initialize() async {
@@ -288,6 +291,61 @@ class TtsService extends ChangeNotifier {
   }
 
   Future<void> play() async {
+    await _playInternal(
+      startOffset: _currentCharIndex,
+      endOffset: null,
+      triggerCompletionHandler: true,
+      resetPositionOnComplete: true,
+    );
+  }
+
+  Future<void> playSelection(TextSelection selection) async {
+    final normalizedSelection = _normalizedSelection(selection);
+    if (normalizedSelection == null) {
+      _errorMessage = 'Select some text before using Play selection.';
+      _playbackState = ReaderPlaybackState.error;
+      notifyListeners();
+      return;
+    }
+
+    _currentCharIndex = normalizedSelection.start;
+    _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
+    await _storageService.savePosition(_currentCharIndex);
+    notifyListeners();
+
+    await _playInternal(
+      startOffset: normalizedSelection.start,
+      endOffset: normalizedSelection.end,
+      triggerCompletionHandler: false,
+      resetPositionOnComplete: false,
+    );
+  }
+
+  Future<void> playFromParagraph(int paragraphIndex) async {
+    if (paragraphIndex < 0 || paragraphIndex >= paragraphCount) {
+      return;
+    }
+
+    final paragraphOffset = _offsetForParagraph(paragraphIndex);
+    _currentCharIndex = paragraphOffset;
+    _currentParagraphIndex = paragraphIndex;
+    await _storageService.savePosition(_currentCharIndex);
+    notifyListeners();
+
+    await _playInternal(
+      startOffset: paragraphOffset,
+      endOffset: null,
+      triggerCompletionHandler: true,
+      resetPositionOnComplete: true,
+    );
+  }
+
+  Future<void> _playInternal({
+    required int startOffset,
+    required int? endOffset,
+    required bool triggerCompletionHandler,
+    required bool resetPositionOnComplete,
+  }) async {
     if (!_engineReady) {
       _errorMessage =
           'Android text-to-speech is not available. Install or enable a TTS engine first.';
@@ -320,12 +378,16 @@ class TtsService extends ChangeNotifier {
     await _syncTtsOptions();
     await _flutterTts.stop();
 
-    final chunks = _buildChunks(_text, startOffset: _currentCharIndex);
+    final chunks = _buildChunks(
+      _text,
+      startOffset: startOffset,
+      endOffset: endOffset,
+    );
     if (chunks.isEmpty) {
       _playbackState = ReaderPlaybackState.completed;
-      _currentCharIndex = 0;
-      _currentParagraphIndex = 0;
-      await _storageService.savePosition(0);
+      _currentCharIndex = resetPositionOnComplete ? 0 : startOffset;
+      _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
+      await _storageService.savePosition(_currentCharIndex);
       notifyListeners();
       return;
     }
@@ -355,12 +417,14 @@ class TtsService extends ChangeNotifier {
 
     if (localSession == _sessionId) {
       _playbackState = ReaderPlaybackState.completed;
-      _currentCharIndex = 0;
-      _currentParagraphIndex = 0;
-      await _storageService.savePosition(0);
+      _currentCharIndex = resetPositionOnComplete
+          ? 0
+          : min(endOffset ?? _currentCharIndex, _text.length);
+      _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
+      await _storageService.savePosition(_currentCharIndex);
       notifyListeners();
       final handler = _playbackCompletedHandler;
-      if (handler != null) {
+      if (triggerCompletionHandler && handler != null) {
         unawaited(handler());
       }
     }
@@ -420,7 +484,11 @@ class TtsService extends ChangeNotifier {
         .toList();
   }
 
-  List<_SpeechChunk> _buildChunks(String source, {required int startOffset}) {
+  List<_SpeechChunk> _buildChunks(
+    String source, {
+    required int startOffset,
+    int? endOffset,
+  }) {
     final chunks = <_SpeechChunk>[];
     final paragraphs = source.split(RegExp(r'\n\s*\n'));
     var paragraphIndex = 0;
@@ -435,14 +503,26 @@ class TtsService extends ChangeNotifier {
         continue;
       }
 
+      if (endOffset != null && paragraphStart >= endOffset) {
+        break;
+      }
+
       if (paragraphStart + paragraph.length < startOffset) {
         paragraphIndex++;
         continue;
       }
 
       final localStart = max(0, startOffset - paragraphStart);
+      final localEnd = endOffset == null
+          ? paragraph.length
+          : min(paragraph.length, max(0, endOffset - paragraphStart));
+      if (localEnd <= localStart) {
+        paragraphIndex++;
+        continue;
+      }
       final paragraphText = paragraph.substring(
         min(localStart, paragraph.length),
+        localEnd,
       );
 
       final pieces = _splitChunk(paragraphText);
@@ -463,6 +543,42 @@ class TtsService extends ChangeNotifier {
     }
 
     return chunks;
+  }
+
+  TextSelection? _normalizedSelection(TextSelection selection) {
+    if (!selection.isValid || selection.isCollapsed || _text.isEmpty) {
+      return null;
+    }
+
+    final start = min(selection.start, selection.end);
+    final end = max(selection.start, selection.end);
+    if (start < 0 || end > _text.length || start >= end) {
+      return null;
+    }
+
+    return TextSelection(baseOffset: start, extentOffset: end);
+  }
+
+  int _offsetForParagraph(int targetIndex) {
+    final rawParagraphs = _text.split(RegExp(r'\n\s*\n'));
+    var paragraphIndex = 0;
+    var offset = 0;
+
+    for (final rawParagraph in rawParagraphs) {
+      final paragraph = rawParagraph.trim();
+      final paragraphStart = offset;
+      offset += rawParagraph.length + 2;
+
+      if (paragraph.isEmpty) {
+        continue;
+      }
+      if (paragraphIndex == targetIndex) {
+        return paragraphStart;
+      }
+      paragraphIndex++;
+    }
+
+    return 0;
   }
 
   List<String> _splitChunk(String paragraph) {
