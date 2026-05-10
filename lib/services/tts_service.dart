@@ -109,7 +109,6 @@ class TtsService extends ChangeNotifier {
     try {
       await _flutterTts.awaitSpeakCompletion(false);
       await _flutterTts.setQueueMode(0);
-      await _flutterTts.setAudioAttributesForNavigation();
 
       _flutterTts.setStartHandler(() {
         _playbackState = ReaderPlaybackState.playing;

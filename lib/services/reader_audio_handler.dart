@@ -26,6 +26,25 @@ class ReaderAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   Future<void> pause() => _ttsService.pause();
 
   @override
+  Future<void> click([MediaButton button = MediaButton.media]) async {
+    switch (button) {
+      case MediaButton.media:
+        if (_ttsService.isPlaying) {
+          await pause();
+        } else {
+          await play();
+        }
+        break;
+      case MediaButton.next:
+        await skipToNext();
+        break;
+      case MediaButton.previous:
+        await skipToPrevious();
+        break;
+    }
+  }
+
+  @override
   Future<void> stop() async {
     await _ttsService.stop();
     playbackState.add(
@@ -149,6 +168,7 @@ class ReaderAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         systemActions: const {
           MediaAction.play,
           MediaAction.pause,
+          MediaAction.playPause,
           MediaAction.stop,
           MediaAction.skipToNext,
           MediaAction.skipToPrevious,

@@ -365,6 +365,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
+                    _NowReadingCard(
+                      ttsService: ttsService,
+                      chapterLabel: importer.activeChapter?.title,
+                      onOpenParagraphs: _showParagraphSheet,
+                    ),
+                    const SizedBox(height: 16),
+                    PlayerControls(
+                      isPlaying: ttsService.isPlaying,
+                      canResume:
+                          ttsService.isPaused || ttsService.currentCharIndex > 0,
+                      onPlay: () => unawaited(audioHandler.play()),
+                      onPause: () => unawaited(audioHandler.pause()),
+                      onStop: () => unawaited(audioHandler.stop()),
+                    ),
+                    const SizedBox(height: 16),
                     SizedBox(
                       height: editorHeight,
                       child: Card(
@@ -375,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             maxLines: null,
                             expands: true,
                             textAlignVertical: TextAlignVertical.top,
-                          style:
+                            style:
                                 Theme.of(context).textTheme.bodyLarge?.copyWith(
                                       height: 1.5,
                                     ),
@@ -415,23 +430,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                    ),
-                    if (!isKeyboardOpen) ...[
-                      const SizedBox(height: 16),
-                      _NowReadingCard(
-                        ttsService: ttsService,
-                        chapterLabel: importer.activeChapter?.title,
-                        onOpenParagraphs: _showParagraphSheet,
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    PlayerControls(
-                      isPlaying: ttsService.isPlaying,
-                      canResume: ttsService.isPaused ||
-                          ttsService.currentCharIndex > 0,
-                      onPlay: () => unawaited(audioHandler.play()),
-                      onPause: () => unawaited(audioHandler.pause()),
-                      onStop: () => unawaited(audioHandler.stop()),
                     ),
                   ],
                 );

@@ -43,3 +43,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local device testing artifacts
+/after_*.png
+/app_launch.png
+/chapters_sheet.png
+/current_*.png
+/current_*.xml
+/device_screen*.png
+/window_dump*.xml
+
+# Android local Kotlin cache
+/android/.kotlin/

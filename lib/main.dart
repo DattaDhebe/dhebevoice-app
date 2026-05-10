@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/services.dart';
 
 import 'package:provider/provider.dart';
 
@@ -13,8 +15,13 @@ import 'services/theme_controller.dart';
 import 'services/tts_service.dart';
 import 'services/web_novel_import_service.dart';
 
+const _playbackChannelId = 'com.textreader.voiceapp.playback.v2';
+const _systemChannel = MethodChannel('com.textreader.voiceapp/system');
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await _ensureAndroidPlaybackChannel();
 
   final storageService = StorageService();
   await storageService.initialize();
@@ -43,10 +50,12 @@ Future<void> main() async {
       novelImportController: novelImportController,
     ),
     config: AudioServiceConfig(
-      androidNotificationChannelId: 'com.textreader.voiceapp.playback',
+      androidNotificationChannelId: _playbackChannelId,
       androidNotificationChannelName: 'DhebeVoice Playback',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
+      androidNotificationChannelDescription:
+          'Playback controls for DhebeVoice reading sessions',
+      androidNotificationOngoing: false,
+      androidStopForegroundOnPause: false,
     ),
   );
 
@@ -58,6 +67,25 @@ Future<void> main() async {
       audioHandler: audioHandler,
     ),
   );
+}
+
+Future<void> _ensureAndroidPlaybackChannel() async {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return;
+  }
+
+  try {
+    await _systemChannel.invokeMethod<void>(
+      'ensurePlaybackChannel',
+      <String, dynamic>{
+        'id': _playbackChannelId,
+        'name': 'DhebeVoice Playback',
+        'description': 'Playback controls for DhebeVoice reading sessions',
+      },
+    );
+  } on PlatformException {
+    // The audio_service plugin can still create its own fallback channel.
+  }
 }
 
 class TextReaderApp extends StatelessWidget {
