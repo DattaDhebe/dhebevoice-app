@@ -92,7 +92,7 @@ class TtsSettingsPanel extends StatelessWidget {
                         },
                   icon: const Icon(Icons.record_voice_over),
                   label: Text(
-                    selectedVoice?.label ?? 'Choose installed voice',
+                    selectedVoice?.selectionLabel ?? 'Choose installed voice',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -231,8 +231,10 @@ class _VoiceSearchDelegate extends SearchDelegate<VoiceModel?> {
         return true;
       }
       return voice.label.toLowerCase().contains(normalizedQuery) ||
+          voice.selectionLabel.toLowerCase().contains(normalizedQuery) ||
           voice.name.toLowerCase().contains(normalizedQuery) ||
-          voice.locale.toLowerCase().contains(normalizedQuery);
+          voice.locale.toLowerCase().contains(normalizedQuery) ||
+          voice.detailsLabel.toLowerCase().contains(normalizedQuery);
     }).toList();
 
     if (filtered.isEmpty) {
@@ -249,8 +251,25 @@ class _VoiceSearchDelegate extends SearchDelegate<VoiceModel?> {
             selectedVoice?.locale == voice.locale;
         return ListTile(
           title: Text(voice.label),
-          subtitle: Text(voice.name),
-          trailing: isSelected ? const Icon(Icons.check_circle) : null,
+          subtitle: Text(voice.detailsLabel),
+          trailing: isSelected
+              ? const Icon(Icons.check_circle)
+              : voice.personaLabel == null
+                  ? null
+                  : Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        voice.personaLabel!,
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ),
           onTap: () => close(context, voice),
         );
       },
