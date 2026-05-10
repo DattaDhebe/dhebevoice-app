@@ -732,7 +732,6 @@ class TtsService extends ChangeNotifier {
     _currentCharIndex = _pausedCharIndex;
     _playbackState = ReaderPlaybackState.paused;
     await _flutterTts.stop();
-    await _audioSession?.setActive(false);
     await _storageService.savePosition(_currentCharIndex);
     notifyListeners();
   }

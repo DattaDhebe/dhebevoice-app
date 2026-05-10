@@ -346,11 +346,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   children: [
-                    _HeaderCard(ttsService: ttsService),
                     if (!importer.isImporting &&
                         (importer.importStatus != null ||
                             importer.errorMessage != null)) ...[
-                      const SizedBox(height: 16),
                       _ImportStatusCard(importer: importer),
                     ],
                     if (importer.activeNovel != null) ...[
@@ -364,21 +362,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             unawaited(audioHandler.skipToNext()),
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    _NowReadingCard(
-                      ttsService: ttsService,
-                      chapterLabel: importer.activeChapter?.title,
-                      onOpenParagraphs: _showParagraphSheet,
-                    ),
-                    const SizedBox(height: 16),
-                    PlayerControls(
-                      isPlaying: ttsService.isPlaying,
-                      canResume:
-                          ttsService.isPaused || ttsService.currentCharIndex > 0,
-                      onPlay: () => unawaited(audioHandler.play()),
-                      onPause: () => unawaited(audioHandler.pause()),
-                      onStop: () => unawaited(audioHandler.stop()),
-                    ),
                     const SizedBox(height: 16),
                     SizedBox(
                       height: editorHeight,
@@ -430,6 +413,23 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
+                    ),
+                    if (!isKeyboardOpen) ...[
+                      const SizedBox(height: 16),
+                      _NowReadingCard(
+                        ttsService: ttsService,
+                        chapterLabel: importer.activeChapter?.title,
+                        onOpenParagraphs: _showParagraphSheet,
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    PlayerControls(
+                      isPlaying: ttsService.isPlaying,
+                      canResume:
+                          ttsService.isPaused || ttsService.currentCharIndex > 0,
+                      onPlay: () => unawaited(audioHandler.play()),
+                      onPause: () => unawaited(audioHandler.pause()),
+                      onStop: () => unawaited(audioHandler.stop()),
                     ),
                   ],
                 );
@@ -528,74 +528,6 @@ class _ImportProgressDialog extends StatelessWidget {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.ttsService});
-
-  final TtsService ttsService;
-
-  @override
-  Widget build(BuildContext context) {
-    final stateText = switch (ttsService.playbackState) {
-      ReaderPlaybackState.playing => 'Reading aloud',
-      ReaderPlaybackState.paused => 'Paused',
-      ReaderPlaybackState.completed => 'Finished',
-      ReaderPlaybackState.error => 'Needs attention',
-      ReaderPlaybackState.stopped => 'Stopped',
-      ReaderPlaybackState.idle => 'Ready',
-    };
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.graphic_eq),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    stateText,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    ttsService.paragraphCount == 0
-                        ? 'Ready for pasted text, local files, or web chapters.'
-                        : 'Paragraph ${ttsService.currentParagraphIndex + 1} of ${ttsService.paragraphCount}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  if (ttsService.errorMessage != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      ttsService.errorMessage!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
