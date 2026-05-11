@@ -272,7 +272,12 @@ class _VoiceSearchDelegate extends SearchDelegate<VoiceModel?> {
                       ),
                       child: Text(
                         voice.personaLabel!,
-                        style: Theme.of(context).textTheme.labelMedium,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                     ),
           onTap: () => close(context, voice),

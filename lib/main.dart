@@ -131,38 +131,117 @@ class TextReaderApp extends StatelessWidget {
 
 ThemeData _buildTheme({required Brightness brightness}) {
   final isDark = brightness == Brightness.dark;
-  final colorScheme = ColorScheme.fromSeed(
+  final scaffoldColor =
+      isDark ? const Color(0xFF071019) : const Color(0xFFEAF1F8);
+  final cardColor = isDark ? const Color(0xFF182430) : Colors.white;
+  final inputFillColor = isDark ? const Color(0xFF1C2936) : Colors.white;
+  final seedScheme = ColorScheme.fromSeed(
     brightness: brightness,
     seedColor: const Color(0xFF5DB0FF),
   );
+  final colorScheme = isDark
+      ? seedScheme.copyWith(
+          primary: const Color(0xFFA8CEFF),
+          onPrimary: const Color(0xFF002B5F),
+          primaryContainer: const Color(0xFF173E73),
+          onPrimaryContainer: const Color(0xFFE0ECFF),
+          secondary: const Color(0xFF8ED7E6),
+          onSecondary: const Color(0xFF003640),
+          surface: const Color(0xFF141B22),
+          onSurface: const Color(0xFFF2F6FC),
+          onSurfaceVariant: const Color(0xFFC7D2E2),
+          outline: const Color(0xFF8D9AAF),
+          outlineVariant: const Color(0xFF3A4658),
+          error: const Color(0xFFFFB4AB),
+          onError: const Color(0xFF690005),
+        )
+      : seedScheme.copyWith(
+          primary: const Color(0xFF0E61C9),
+          onPrimary: Colors.white,
+          primaryContainer: const Color(0xFFDCEAFF),
+          onPrimaryContainer: const Color(0xFF08264C),
+          secondary: const Color(0xFF006B79),
+          onSecondary: Colors.white,
+          surface: Colors.white,
+          onSurface: const Color(0xFF121A27),
+          onSurfaceVariant: const Color(0xFF3A485B),
+          outline: const Color(0xFF66768B),
+          outlineVariant: const Color(0xFFD0D8E4),
+          error: const Color(0xFFB3261E),
+          onError: Colors.white,
+        );
 
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
     colorScheme: colorScheme,
-    scaffoldBackgroundColor:
-        isDark ? const Color(0xFF0B0F14) : const Color(0xFFF4F8FC),
+    scaffoldBackgroundColor: scaffoldColor,
     appBarTheme: const AppBarTheme(
       centerTitle: false,
       backgroundColor: Colors.transparent,
       elevation: 0,
     ),
     cardTheme: CardThemeData(
-      color: isDark ? const Color(0xFF141B22) : Colors.white,
-      elevation: 0,
+      color: cardColor,
+      elevation: isDark ? 0 : 2,
+      shadowColor: isDark
+          ? Colors.transparent
+          : const Color(0xFF91A6C6).withValues(alpha: 0.18),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
+        side: BorderSide(
+          color: isDark
+              ? colorScheme.outlineVariant
+              : colorScheme.outlineVariant.withValues(alpha: 0.8),
+        ),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: isDark ? const Color(0xFF141B22) : Colors.white,
+      fillColor: inputFillColor,
+      hintStyle: TextStyle(
+        color: colorScheme.onSurfaceVariant,
+      ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(24),
         borderSide: BorderSide.none,
       ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(24),
+        borderSide: BorderSide(
+          color: isDark
+              ? colorScheme.outlineVariant
+              : colorScheme.outlineVariant.withValues(alpha: 0.8),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(24),
+        borderSide: BorderSide(
+          color: colorScheme.primary,
+          width: 1.5,
+        ),
+      ),
       contentPadding: const EdgeInsets.all(20),
     ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+        side: BorderSide(
+          color: isDark
+              ? colorScheme.outlineVariant
+              : colorScheme.outlineVariant.withValues(alpha: 0.8),
+        ),
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: cardColor,
+      modalBackgroundColor: cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+    ),
+    dividerColor: colorScheme.outlineVariant,
     sliderTheme: const SliderThemeData(
       showValueIndicator: ShowValueIndicator.onDrag,
     ),

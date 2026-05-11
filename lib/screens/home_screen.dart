@@ -405,11 +405,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   children: [
-                    if (!importer.isImporting &&
-                        (importer.importStatus != null ||
-                            importer.errorMessage != null)) ...[
-                      _ImportStatusCard(importer: importer),
-                    ],
+                    _ImportStatusCard(
+                      importer: importer,
+                      onStartImport: _showImportUrlDialog,
+                    ),
                     if (importer.activeNovel != null) ...[
                       const SizedBox(height: 16),
                       _ActiveNovelCard(
@@ -509,7 +508,10 @@ class _ChapterBadge extends StatelessWidget {
       child: Text(
         label,
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.labelLarge,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }
@@ -548,7 +550,7 @@ class _ImportProgressDialog extends StatelessWidget {
                     Text(
                       '$progressPercent% complete',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                            color: colorScheme.onSurface,
                           ),
                     ),
                   ] else ...[
@@ -556,7 +558,7 @@ class _ImportProgressDialog extends StatelessWidget {
                     Text(
                       'Following chapter links and downloading text...',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                            color: colorScheme.onSurface,
                           ),
                     ),
                   ],
@@ -584,12 +586,18 @@ class _ImportProgressDialog extends StatelessWidget {
 }
 
 class _ImportStatusCard extends StatelessWidget {
-  const _ImportStatusCard({required this.importer});
+  const _ImportStatusCard({
+    required this.importer,
+    required this.onStartImport,
+  });
 
   final NovelImportController importer;
+  final VoidCallback onStartImport;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -615,6 +623,28 @@ class _ImportStatusCard extends StatelessWidget {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
+            const SizedBox(height: 16),
+            if (importer.isImporting)
+              TextButton.icon(
+                onPressed: importer.isCancellingImport
+                    ? null
+                    : () => unawaited(importer.cancelImport()),
+                icon: const Icon(Icons.stop_circle_outlined),
+                label: Text(
+                  importer.isCancellingImport
+                      ? 'Stopping...'
+                      : 'Stop download',
+                ),
+              )
+            else
+              FilledButton.tonalIcon(
+                onPressed: onStartImport,
+                icon: const Icon(Icons.play_circle_outline),
+                label: const Text('Start web import'),
+                style: FilledButton.styleFrom(
+                  foregroundColor: colorScheme.onSecondaryContainer,
+                ),
+              ),
           ],
         ),
       ),
@@ -660,7 +690,7 @@ class _ActiveNovelCard extends StatelessWidget {
             Text(
               '${novel.chapters.length} chapters • ${Uri.tryParse(novel.sourceUrl)?.host ?? novel.sourceUrl}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                    color: colorScheme.onSurface,
                   ),
             ),
             if (chapter != null) ...[
@@ -762,7 +792,8 @@ class _NowReadingCard extends StatelessWidget {
                 Text(
                   'Paragraph ${ttsService.currentParagraphIndex + 1}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
                       ),
                 ),
               ],
@@ -772,7 +803,7 @@ class _NowReadingCard extends StatelessWidget {
               Text(
                 chapterText,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                      color: colorScheme.onSurface,
                     ),
               ),
             ],
@@ -783,7 +814,7 @@ class _NowReadingCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     height: 1.45,
-                    color: colorScheme.onSurface.withValues(alpha: 0.88),
+                    color: colorScheme.onSurface,
                   ),
             ),
             if (ttsService.paragraphCount > 0) ...[
