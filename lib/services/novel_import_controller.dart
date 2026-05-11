@@ -37,6 +37,7 @@ class NovelImportController extends ChangeNotifier {
   String? _errorMessage;
   double? _importProgress;
   String _selectedWebAccessModeId = WebNovelImportService.defaultAccessModeId;
+  String? _pendingSharedUrl;
 
   List<NovelBook> get library => _library;
   NovelBook? get activeNovel => _activeNovel;
@@ -47,6 +48,9 @@ class NovelImportController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   double? get importProgress => _importProgress;
   String get selectedWebAccessModeId => _selectedWebAccessModeId;
+  String? get pendingSharedUrl => _pendingSharedUrl;
+  bool get hasPendingSharedUrl =>
+      _pendingSharedUrl != null && _pendingSharedUrl!.trim().isNotEmpty;
   List<WebAccessMode> get availableWebAccessModes =>
       WebNovelImportService.accessModes;
 
@@ -85,12 +89,42 @@ class NovelImportController extends ChangeNotifier {
     }
 
     if (_looksLikeUrl(trimmed)) {
-      await importNovelFromUrl(trimmed);
+      await queueSharedUrl(trimmed);
       return;
     }
 
     await clearActiveNovel();
     await _ttsService.handleSharedText(trimmed);
+  }
+
+  Future<void> queueSharedUrl(String url) async {
+    _pendingSharedUrl = url.trim();
+    _errorMessage = null;
+    _importProgress = null;
+    _importStatus = 'Shared link ready. Choose a website access mode, then start import.';
+    notifyListeners();
+  }
+
+  Future<void> clearPendingSharedUrl() async {
+    if (!hasPendingSharedUrl) {
+      return;
+    }
+
+    _pendingSharedUrl = null;
+    if (!_isImporting) {
+      _importStatus = null;
+      _errorMessage = null;
+      _importProgress = null;
+    }
+    notifyListeners();
+  }
+
+  Future<void> importPendingSharedUrl({String? accessModeId}) async {
+    final url = _pendingSharedUrl;
+    if (url == null || url.trim().isEmpty) {
+      return;
+    }
+    await importNovelFromUrl(url, accessModeId: accessModeId);
   }
 
   Future<void> setWebAccessMode(String modeId) async {
@@ -172,6 +206,7 @@ class NovelImportController extends ChangeNotifier {
     _importProgress = null;
     _errorMessage = null;
     notifyListeners();
+    var completedWithoutCancellation = false;
 
     try {
       final result = await _webNovelImportService.importNovelResultFromUrl(
@@ -209,10 +244,15 @@ class NovelImportController extends ChangeNotifier {
             : 'Stopped after ${imported.chapters.length} chapters.';
       } else if (imported != null) {
         _importStatus = 'Imported ${imported.chapters.length} chapters.';
+        completedWithoutCancellation = true;
       }
     } catch (error) {
       _errorMessage = error.toString().replaceFirst('Exception: ', '');
     } finally {
+      if (completedWithoutCancellation &&
+          _pendingSharedUrl?.trim() == url.trim()) {
+        _pendingSharedUrl = null;
+      }
       _isImporting = false;
       _isCancellingImport = false;
       _importProgress = null;

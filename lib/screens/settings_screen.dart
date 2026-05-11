@@ -111,12 +111,16 @@ class SettingsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: importer.selectedWebAccessModeId,
                         items: importer.availableWebAccessModes
                             .map(
                               (mode) => DropdownMenuItem(
                                 value: mode.id,
-                                child: Text(mode.label),
+                                child: Text(
+                                  mode.label,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             )
                             .toList(),

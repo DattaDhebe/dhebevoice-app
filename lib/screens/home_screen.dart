@@ -8,6 +8,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import '../models/novel_book.dart';
 import '../services/novel_import_controller.dart';
 import '../services/tts_service.dart';
+import '../services/web_novel_import_service.dart';
 import '../widgets/player_controls.dart';
 import 'settings_screen.dart';
 
@@ -52,7 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _showImportUrlDialog() async {
     final importer = context.read<NovelImportController>();
-    final controller = TextEditingController();
+    final controller = TextEditingController(
+      text: importer.pendingSharedUrl ?? '',
+    );
     var selectedModeId = importer.selectedWebAccessModeId;
 
     await showDialog<void>(
@@ -81,27 +84,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedModeId,
-                    items: importer.availableWebAccessModes
-                        .map(
-                          (mode) => DropdownMenuItem(
-                            value: mode.id,
-                            child: Text(mode.label),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
+                  _AccessModePickerField(
+                    label: 'Website access mode',
+                    modes: importer.availableWebAccessModes,
+                    selectedModeId: selectedModeId,
+                    onSelected: (value) {
                       setState(() {
                         selectedModeId = value;
                       });
                     },
-                    decoration: const InputDecoration(
-                      labelText: 'Website access mode',
-                    ),
                   ),
                   const SizedBox(height: 10),
                   Text(
@@ -350,7 +341,10 @@ class _HomeScreenState extends State<HomeScreen> {
               IconButton(
                 tooltip: 'Import web link',
                 onPressed: _showImportUrlDialog,
-                icon: const Icon(Icons.link),
+                icon: Badge(
+                  isLabelVisible: importer.hasPendingSharedUrl,
+                  child: const Icon(Icons.link),
+                ),
               ),
               IconButton(
                 tooltip: 'Library',
@@ -405,12 +399,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   children: [
-                    _ImportStatusCard(
-                      importer: importer,
-                      onStartImport: _showImportUrlDialog,
-                    ),
+                    if (!importer.isImporting && importer.hasPendingSharedUrl)
+                      _ImportStatusCard(
+                        importer: importer,
+                        onStartImport: _showImportUrlDialog,
+                        onStartPendingImport: () => unawaited(
+                          importer.importPendingSharedUrl(),
+                        ),
+                        onModeChanged: (value) => unawaited(
+                          importer.setWebAccessMode(value),
+                        ),
+                        onClearSharedLink: () => unawaited(
+                          importer.clearPendingSharedUrl(),
+                        ),
+                      ),
                     if (importer.activeNovel != null) ...[
-                      const SizedBox(height: 16),
+                      if (!importer.isImporting && importer.hasPendingSharedUrl)
+                        const SizedBox(height: 16),
                       _ActiveNovelCard(
                         importer: importer,
                         onOpenChapters: _showChapterSheet,
@@ -461,7 +466,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               hintText:
                                   'Paste text here, import a .txt or .epub file, or share a novel link from your browser.',
                               border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              focusedErrorBorder: InputBorder.none,
                               filled: false,
+                              isCollapsed: true,
                               contentPadding: EdgeInsets.zero,
                             ),
                             onChanged: (value) {
@@ -589,14 +600,33 @@ class _ImportStatusCard extends StatelessWidget {
   const _ImportStatusCard({
     required this.importer,
     required this.onStartImport,
+    required this.onStartPendingImport,
+    required this.onModeChanged,
+    required this.onClearSharedLink,
   });
 
   final NovelImportController importer;
   final VoidCallback onStartImport;
+  final VoidCallback onStartPendingImport;
+  final ValueChanged<String> onModeChanged;
+  final VoidCallback onClearSharedLink;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final hasPendingSharedUrl = importer.hasPendingSharedUrl;
+    final selectedMode = importer.availableWebAccessModes.firstWhere(
+      (mode) => mode.id == importer.selectedWebAccessModeId,
+      orElse: () => importer.availableWebAccessModes.first,
+    );
+    final pendingUri = hasPendingSharedUrl
+        ? Uri.tryParse(importer.pendingSharedUrl!)
+        : null;
+    final pendingLabel = pendingUri == null
+        ? importer.pendingSharedUrl
+        : pendingUri.host.isEmpty
+            ? importer.pendingSharedUrl
+            : pendingUri.host;
 
     return Card(
       child: Padding(
@@ -604,10 +634,56 @@ class _ImportStatusCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              importer.isImporting ? 'Importing web novel' : 'Web import',
-              style: Theme.of(context).textTheme.titleMedium,
+            Row(
+              children: [
+                Icon(
+                  hasPendingSharedUrl
+                      ? Icons.share_outlined
+                      : importer.isImporting
+                          ? Icons.downloading_outlined
+                          : Icons.link,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    importer.isImporting
+                        ? 'Importing web novel'
+                        : hasPendingSharedUrl
+                            ? 'Shared web link ready'
+                            : 'Web import',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                if (hasPendingSharedUrl && !importer.isImporting)
+                  IconButton(
+                    tooltip: 'Clear shared link',
+                    onPressed: onClearSharedLink,
+                    icon: const Icon(Icons.close),
+                  ),
+              ],
             ),
+            if (hasPendingSharedUrl) ...[
+              const SizedBox(height: 10),
+              Text(
+                pendingLabel ?? importer.pendingSharedUrl!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              if (importer.pendingSharedUrl != pendingLabel) ...[
+                const SizedBox(height: 4),
+                Text(
+                  importer.pendingSharedUrl!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ],
             if (importer.importStatus != null) ...[
               const SizedBox(height: 10),
               Text(importer.importStatus!),
@@ -621,6 +697,22 @@ class _ImportStatusCard extends StatelessWidget {
               Text(
                 importer.errorMessage!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            if (hasPendingSharedUrl && !importer.isImporting) ...[
+              const SizedBox(height: 16),
+              _AccessModePickerField(
+                label: 'Website access mode',
+                modes: importer.availableWebAccessModes,
+                selectedModeId: importer.selectedWebAccessModeId,
+                onSelected: onModeChanged,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                selectedMode.description,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
               ),
             ],
             const SizedBox(height: 16),
@@ -638,14 +730,107 @@ class _ImportStatusCard extends StatelessWidget {
               )
             else
               FilledButton.tonalIcon(
-                onPressed: onStartImport,
-                icon: const Icon(Icons.play_circle_outline),
-                label: const Text('Start web import'),
+                onPressed:
+                    hasPendingSharedUrl ? onStartPendingImport : onStartImport,
+                icon: Icon(
+                  hasPendingSharedUrl
+                      ? Icons.play_circle_outline
+                      : Icons.add_link,
+                ),
+                label: Text(
+                  hasPendingSharedUrl
+                      ? 'Start web import'
+                      : 'Paste or import web link',
+                ),
                 style: FilledButton.styleFrom(
                   foregroundColor: colorScheme.onSecondaryContainer,
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccessModePickerField extends StatelessWidget {
+  const _AccessModePickerField({
+    required this.label,
+    required this.modes,
+    required this.selectedModeId,
+    required this.onSelected,
+  });
+
+  final String label;
+  final List<WebAccessMode> modes;
+  final String selectedModeId;
+  final ValueChanged<String> onSelected;
+
+  Future<void> _showModeSheet(BuildContext context) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return SafeArea(
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+            itemCount: modes.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final mode = modes[index];
+              final isSelected = mode.id == selectedModeId;
+              return ListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                title: Text(
+                  mode.label,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w600,
+                      ),
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(mode.description),
+                ),
+                trailing: isSelected
+                    ? Icon(Icons.check_circle, color: colorScheme.primary)
+                    : const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).pop(mode.id),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (selected != null && selected != selectedModeId) {
+      onSelected(selected);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedMode = modes.firstWhere(
+      (mode) => mode.id == selectedModeId,
+      orElse: () => modes.first,
+    );
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: () => unawaited(_showModeSheet(context)),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          suffixIcon: const Icon(Icons.unfold_more),
+        ),
+        child: Text(
+          selectedMode.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyLarge,
         ),
       ),
     );
