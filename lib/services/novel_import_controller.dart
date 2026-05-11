@@ -36,6 +36,7 @@ class NovelImportController extends ChangeNotifier {
   String? _importStatus;
   String? _errorMessage;
   double? _importProgress;
+  String _selectedWebAccessModeId = WebNovelImportService.defaultAccessModeId;
 
   List<NovelBook> get library => _library;
   NovelBook? get activeNovel => _activeNovel;
@@ -45,6 +46,9 @@ class NovelImportController extends ChangeNotifier {
   String? get importStatus => _importStatus;
   String? get errorMessage => _errorMessage;
   double? get importProgress => _importProgress;
+  String get selectedWebAccessModeId => _selectedWebAccessModeId;
+  List<WebAccessMode> get availableWebAccessModes =>
+      WebNovelImportService.accessModes;
 
   NovelChapter? get activeChapter =>
       _activeNovel == null || _activeNovel!.chapters.isEmpty
@@ -53,6 +57,9 @@ class NovelImportController extends ChangeNotifier {
 
   Future<void> initialize() async {
     _library = await _novelLibraryService.loadLibrary();
+    _selectedWebAccessModeId = WebNovelImportService.normalizeAccessModeId(
+      _storageService.webAccessModeId,
+    );
     final savedNovelId = _storageService.activeNovelId;
     if (savedNovelId == null || savedNovelId.isEmpty) {
       notifyListeners();
@@ -84,6 +91,17 @@ class NovelImportController extends ChangeNotifier {
 
     await clearActiveNovel();
     await _ttsService.handleSharedText(trimmed);
+  }
+
+  Future<void> setWebAccessMode(String modeId) async {
+    final resolvedModeId = WebNovelImportService.normalizeAccessModeId(modeId);
+    if (_selectedWebAccessModeId == resolvedModeId) {
+      return;
+    }
+
+    _selectedWebAccessModeId = resolvedModeId;
+    await _storageService.saveWebAccessModeId(resolvedModeId);
+    notifyListeners();
   }
 
   Future<void> importLocalFile() async {
@@ -139,7 +157,15 @@ class NovelImportController extends ChangeNotifier {
         (!uri.hasScheme && uri.host.isNotEmpty);
   }
 
-  Future<void> importNovelFromUrl(String url) async {
+  Future<void> importNovelFromUrl(String url, {String? accessModeId}) async {
+    final resolvedAccessModeId = WebNovelImportService.normalizeAccessModeId(
+      accessModeId ?? _selectedWebAccessModeId,
+    );
+    if (_selectedWebAccessModeId != resolvedAccessModeId) {
+      _selectedWebAccessModeId = resolvedAccessModeId;
+      await _storageService.saveWebAccessModeId(resolvedAccessModeId);
+    }
+
     _isImporting = true;
     _isCancellingImport = false;
     _importStatus = 'Connecting to source...';
@@ -150,6 +176,7 @@ class NovelImportController extends ChangeNotifier {
     try {
       final result = await _webNovelImportService.importNovelResultFromUrl(
         url,
+        accessModeId: resolvedAccessModeId,
         onProgress: (current, total, status) {
           _importStatus = status;
           _importProgress = total == null || total == 0

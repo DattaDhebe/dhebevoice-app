@@ -8,21 +8,41 @@ import '../models/novel_book.dart';
 
 class WebNovelImportService {
   static const _maxChapters = 200;
-  static const _headers = {
-    'User-Agent':
-        'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/136.0 Mobile Safari/537.36',
-    'Accept-Language': 'en-US,en;q=0.9',
-  };
+  static const defaultAccessModeId = 'mobile_browser';
+  static const accessModes = [
+    WebAccessMode(
+      id: defaultAccessModeId,
+      label: 'Mobile browser (Current)',
+      description: 'Keeps the current Android Chrome-style import behavior.',
+    ),
+    WebAccessMode(
+      id: 'desktop_browser',
+      label: 'Desktop browser',
+      description: 'Uses desktop Chrome headers for sites that block mobile requests.',
+    ),
+    WebAccessMode(
+      id: 'browser_with_referer',
+      label: 'Browser + referer',
+      description: 'Adds a matching site referer and broader browser headers.',
+    ),
+    WebAccessMode(
+      id: 'googlebot',
+      label: 'Googlebot',
+      description: 'Tries crawler-style headers for strict 403 or anti-bot blocks.',
+    ),
+  ];
 
   final http.Client _client = http.Client();
 
   Future<NovelBook> importNovelFromUrl(
     String rawUrl, {
+    String accessModeId = defaultAccessModeId,
     void Function(int current, int? total, String status)? onProgress,
     bool Function()? shouldCancel,
   }) async {
     final result = await importNovelResultFromUrl(
       rawUrl,
+      accessModeId: accessModeId,
       onProgress: onProgress,
       shouldCancel: shouldCancel,
     );
@@ -34,11 +54,16 @@ class WebNovelImportService {
 
   Future<NovelImportResult> importNovelResultFromUrl(
     String rawUrl, {
+    String accessModeId = defaultAccessModeId,
     void Function(int current, int? total, String status)? onProgress,
     bool Function()? shouldCancel,
   }) async {
+    final resolvedAccessModeId = normalizeAccessModeId(accessModeId);
     final startingUri = _normalizeUri(rawUrl);
-    final firstPage = await _fetchPage(startingUri);
+    final firstPage = await _fetchPage(
+      startingUri,
+      accessModeId: resolvedAccessModeId,
+    );
     if (_shouldStop(shouldCancel)) {
       return const NovelImportResult(wasCancelled: true);
     }
@@ -57,11 +82,13 @@ class WebNovelImportService {
     final chapters = looksLikeChapter
         ? await _crawlChapterSequence(
             firstPage,
+            accessModeId: resolvedAccessModeId,
             onProgress: onProgress,
             shouldCancel: shouldCancel,
           )
         : await _crawlChapterIndex(
             firstPage,
+            accessModeId: resolvedAccessModeId,
             onProgress: onProgress,
             shouldCancel: shouldCancel,
           );
@@ -89,6 +116,17 @@ class WebNovelImportService {
     );
   }
 
+  static String normalizeAccessModeId(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return defaultAccessModeId;
+    }
+
+    final normalized = value.trim();
+    return accessModes.any((mode) => mode.id == normalized)
+        ? normalized
+        : defaultAccessModeId;
+  }
+
   Uri _normalizeUri(String input) {
     final trimmed = input.trim();
     final candidate = trimmed.startsWith('http')
@@ -101,10 +139,24 @@ class WebNovelImportService {
     return uri;
   }
 
-  Future<_FetchedPage> _fetchPage(Uri uri) async {
-    final response = await _client.get(uri, headers: _headers);
+  Future<_FetchedPage> _fetchPage(
+    Uri uri, {
+    required String accessModeId,
+  }) async {
+    final resolvedAccessModeId = normalizeAccessModeId(accessModeId);
+    final response = await _client.get(
+      uri,
+      headers: _headersForMode(uri, resolvedAccessModeId),
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Could not open ${uri.host} (${response.statusCode}).');
+      if (response.statusCode == 403) {
+        throw Exception(
+          '${uri.host} blocked ${_accessModeLabel(resolvedAccessModeId)} with a 403 error. Choose another website access mode and try again.',
+        );
+      }
+      throw Exception(
+        'Could not open ${uri.host} (${response.statusCode}) using ${_accessModeLabel(resolvedAccessModeId)}.',
+      );
     }
 
     final decoded = utf8.decode(response.bodyBytes, allowMalformed: true);
@@ -117,6 +169,7 @@ class WebNovelImportService {
 
   Future<List<NovelChapter>> _crawlChapterSequence(
     _FetchedPage firstPage, {
+    required String accessModeId,
     void Function(int current, int? total, String status)? onProgress,
     bool Function()? shouldCancel,
   }) async {
@@ -172,7 +225,7 @@ class WebNovelImportService {
         index: index + 1,
       );
       onProgress?.call(index + 1, null, 'Downloading $nextChapterLabel');
-      current = await _fetchPage(nextUri);
+      current = await _fetchPage(nextUri, accessModeId: accessModeId);
     }
 
     return chapters;
@@ -180,6 +233,7 @@ class WebNovelImportService {
 
   Future<List<NovelChapter>> _crawlChapterIndex(
     _FetchedPage firstPage, {
+    required String accessModeId,
     void Function(int current, int? total, String status)? onProgress,
     bool Function()? shouldCancel,
   }) async {
@@ -187,6 +241,7 @@ class WebNovelImportService {
     if (links.isEmpty) {
       return _crawlChapterSequence(
         firstPage,
+        accessModeId: accessModeId,
         onProgress: onProgress,
         shouldCancel: shouldCancel,
       );
@@ -210,7 +265,7 @@ class WebNovelImportService {
         links.length,
         'Downloading $chapterLabel',
       );
-      final page = await _fetchPage(entry.uri);
+      final page = await _fetchPage(entry.uri, accessModeId: accessModeId);
       final content = _extractReadableText(page.document);
       if (content.trim().isEmpty) {
         continue;
@@ -490,6 +545,70 @@ class WebNovelImportService {
     return input.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
+  Map<String, String> _headersForMode(Uri uri, String accessModeId) {
+    final referer = _rootUri(uri).toString();
+    const common = {
+      'Accept':
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+    };
+
+    switch (normalizeAccessModeId(accessModeId)) {
+      case 'desktop_browser':
+        return {
+          ...common,
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/136.0.0.0 Safari/537.36',
+          'Upgrade-Insecure-Requests': '1',
+        };
+      case 'browser_with_referer':
+        return {
+          ...common,
+          'User-Agent':
+              'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/136.0 Mobile Safari/537.36',
+          'Referer': referer,
+          'Origin': referer.endsWith('/')
+              ? referer.substring(0, referer.length - 1)
+              : referer,
+          'Upgrade-Insecure-Requests': '1',
+        };
+      case 'googlebot':
+        return {
+          ...common,
+          'User-Agent':
+              'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Referer': referer,
+        };
+      case defaultAccessModeId:
+      default:
+        return {
+          ...common,
+          'User-Agent':
+              'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/136.0 Mobile Safari/537.36',
+        };
+    }
+  }
+
+  String _accessModeLabel(String accessModeId) {
+    return accessModes
+        .firstWhere(
+          (mode) => mode.id == normalizeAccessModeId(accessModeId),
+          orElse: () => accessModes.first,
+        )
+        .label;
+  }
+
+  Uri _rootUri(Uri uri) {
+    return Uri(
+      scheme: uri.scheme,
+      host: uri.host,
+      port: uri.hasPort ? uri.port : null,
+      path: '/',
+    );
+  }
+
   bool _shouldStop(bool Function()? shouldCancel) {
     return shouldCancel?.call() ?? false;
   }
@@ -525,4 +644,16 @@ class _ChapterLink {
   final Uri uri;
   final String text;
   final int score;
+}
+
+class WebAccessMode {
+  const WebAccessMode({
+    required this.id,
+    required this.label,
+    required this.description,
+  });
+
+  final String id;
+  final String label;
+  final String description;
 }

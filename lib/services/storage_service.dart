@@ -12,6 +12,7 @@ class StorageService {
   static const _activeNovelIdKey = 'reader_active_novel_id';
   static const _activeChapterIndexKey = 'reader_active_chapter_index';
   static const _themeModeKey = 'reader_theme_mode';
+  static const _webAccessModeKey = 'reader_web_access_mode';
 
   late final SharedPreferences _prefs;
 
@@ -30,6 +31,7 @@ class StorageService {
   String? get activeNovelId => _prefs.getString(_activeNovelIdKey);
   int get activeChapterIndex => _prefs.getInt(_activeChapterIndexKey) ?? 0;
   String? get themeMode => _prefs.getString(_themeModeKey);
+  String? get webAccessModeId => _prefs.getString(_webAccessModeKey);
 
   Future<void> saveText(String value) => _prefs.setString(_textKey, value);
   Future<void> saveLanguage(String value) =>
@@ -52,6 +54,8 @@ class StorageService {
   Future<void> savePosition(int value) => _prefs.setInt(_positionKey, value);
   Future<void> saveThemeMode(String value) =>
       _prefs.setString(_themeModeKey, value);
+  Future<void> saveWebAccessModeId(String value) =>
+      _prefs.setString(_webAccessModeKey, value);
 
   Future<void> resetTtsSettings() async {
     await _prefs.remove(_languageKey);

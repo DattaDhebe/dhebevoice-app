@@ -53,34 +53,81 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _showImportUrlDialog() async {
     final importer = context.read<NovelImportController>();
     final controller = TextEditingController();
+    var selectedModeId = importer.selectedWebAccessModeId;
 
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          scrollable: true,
-          title: const Text('Import novel link'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              hintText: 'Paste chapter or contents URL',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await importer.importNovelFromUrl(controller.text);
-              },
-              child: const Text('Import'),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final selectedMode = importer.availableWebAccessModes.firstWhere(
+              (mode) => mode.id == selectedModeId,
+              orElse: () => importer.availableWebAccessModes.first,
+            );
+
+            return AlertDialog(
+              scrollable: true,
+              title: const Text('Import novel link'),
+              content: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(
+                      hintText: 'Paste chapter or contents URL',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedModeId,
+                    items: importer.availableWebAccessModes
+                        .map(
+                          (mode) => DropdownMenuItem(
+                            value: mode.id,
+                            child: Text(mode.label),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        selectedModeId = value;
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Website access mode',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    selectedMode.description,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await importer.importNovelFromUrl(
+                      controller.text,
+                      accessModeId: selectedModeId,
+                    );
+                  },
+                  child: const Text('Import'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
