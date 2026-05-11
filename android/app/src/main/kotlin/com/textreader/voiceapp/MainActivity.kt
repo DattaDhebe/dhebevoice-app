@@ -59,7 +59,7 @@ class MainActivity : AudioServiceActivity() {
         val channel = NotificationChannel(
             channelId,
             channelName,
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description = channelDescription.orEmpty()
             setShowBadge(false)

@@ -52,6 +52,7 @@ class TtsService extends ChangeNotifier {
   bool _queuedResetPositionOnComplete = true;
   bool _queuedTriggerCompletionHandler = true;
   bool _engineReady = false;
+  bool _resumeAfterInterruption = false;
   Future<void> Function()? _playbackCompletedHandler;
 
   List<VoiceModel> get voices => _voices;
@@ -158,23 +159,44 @@ class TtsService extends ChangeNotifier {
 
   Future<void> _configureAudioSession() async {
     final session = await AudioSession.instance;
-    await session.configure(AudioSessionConfiguration.speech());
+    await session.configure(
+      const AudioSessionConfiguration.speech().copyWith(
+        androidWillPauseWhenDucked: false,
+      ),
+    );
     _audioSession = session;
 
     _interruptionSubscription =
         session.interruptionEventStream.listen((event) {
-      if (!event.begin || !isPlaying) {
-        return;
-      }
+          if (event.begin) {
+            if (!isPlaying) {
+              return;
+            }
 
-      switch (event.type) {
-        case AudioInterruptionType.pause:
-        case AudioInterruptionType.unknown:
-          unawaited(pause());
-        case AudioInterruptionType.duck:
-          break;
-      }
-    });
+            switch (event.type) {
+              case AudioInterruptionType.pause:
+              case AudioInterruptionType.unknown:
+                _resumeAfterInterruption = true;
+                unawaited(pause(fromSystemInterruption: true));
+              case AudioInterruptionType.duck:
+                break;
+            }
+            return;
+          }
+
+          switch (event.type) {
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              if (_resumeAfterInterruption && isPaused) {
+                _resumeAfterInterruption = false;
+                unawaited(play());
+              } else {
+                _resumeAfterInterruption = false;
+              }
+            case AudioInterruptionType.duck:
+              break;
+          }
+        });
 
     _becomingNoisySubscription =
         session.becomingNoisyEventStream.listen((_) {
@@ -667,6 +689,7 @@ class TtsService extends ChangeNotifier {
     _queuedChunks = const [];
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
+    _resumeAfterInterruption = false;
     await _audioSession?.setActive(false);
 
     _playbackState = ReaderPlaybackState.completed;
@@ -692,6 +715,7 @@ class TtsService extends ChangeNotifier {
     _queuedChunks = const [];
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
+    _resumeAfterInterruption = false;
     await _audioSession?.setActive(false);
 
     _playbackState = ReaderPlaybackState.error;
@@ -730,11 +754,14 @@ class TtsService extends ChangeNotifier {
         _playbackState == ReaderPlaybackState.playing;
   }
 
-  Future<void> pause() async {
+  Future<void> pause({bool fromSystemInterruption = false}) async {
     if (!isPlaying) {
       return;
     }
 
+    if (!fromSystemInterruption) {
+      _resumeAfterInterruption = false;
+    }
     _sessionId++;
     _pausedCharIndex = min(
       max(_currentCharIndex, _activeChunkOffset),
@@ -753,6 +780,7 @@ class TtsService extends ChangeNotifier {
     _queuedChunks = const [];
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
+    _resumeAfterInterruption = false;
     _playbackState = ReaderPlaybackState.stopped;
     _errorMessage = null;
     _currentCharIndex = 0;

@@ -15,7 +15,7 @@ import 'services/theme_controller.dart';
 import 'services/tts_service.dart';
 import 'services/web_novel_import_service.dart';
 
-const _playbackChannelId = 'com.textreader.voiceapp.playback.v2';
+const _playbackChannelId = 'com.textreader.voiceapp.playback.v3';
 const _systemChannel = MethodChannel('com.textreader.voiceapp/system');
 
 Future<void> main() async {
