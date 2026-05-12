@@ -270,15 +270,17 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog<void>(
       context: context,
       builder: (context) {
-        final dialogWidth = min(MediaQuery.sizeOf(context).width * 0.92, 640.0);
-        final dialogHeight =
-            min(MediaQuery.sizeOf(context).height * 0.78, 720.0);
+        final dialogWidth = min(MediaQuery.sizeOf(context).width * 0.9, 620.0);
+        final maxDialogHeight =
+            min(MediaQuery.sizeOf(context).height * 0.62, 560.0);
 
         return Dialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: SizedBox(
-            width: dialogWidth,
-            height: dialogHeight,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: dialogWidth,
+              maxHeight: maxDialogHeight,
+            ),
             child: Consumer2<NovelImportController, TtsService>(
               builder: (context, importer, ttsService, _) {
                 final colorScheme = Theme.of(context).colorScheme;
@@ -289,6 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 return Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
@@ -323,7 +326,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                       ),
                       const SizedBox(height: 18),
-                      Expanded(
+                      Flexible(
+                        fit: FlexFit.loose,
                         child: SingleChildScrollView(
                           child: Text(
                             ttsService.currentParagraph,
@@ -334,15 +338,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   fontWeight: FontWeight.w500,
                                 ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.minimize),
-                          label: const Text('Minimize'),
                         ),
                       ),
                     ],
