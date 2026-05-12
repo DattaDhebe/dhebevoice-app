@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _textController;
   StreamSubscription<List<SharedMediaFile>>? _shareSubscription;
   bool _isImportDialogOpen = false;
+  bool _isImportDialogMinimized = false;
 
   @override
   void initState() {
@@ -177,6 +179,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (novel == null) {
       return;
     }
+    final selectedIndex = importer.activeChapterIndex;
+    final controller = ScrollController(
+      initialScrollOffset: max(0.0, (selectedIndex - 2) * 72.0),
+    );
 
     showModalBottomSheet<void>(
       context: context,
@@ -187,6 +193,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: SizedBox(
             height: MediaQuery.of(context).size.height * 0.72,
             child: ListView.builder(
+              controller: controller,
+              itemExtent: 72,
               itemCount: novel.chapters.length,
               itemBuilder: (context, index) {
                 final chapter = novel.chapters[index];
@@ -213,6 +221,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (ttsService.paragraphCount == 0) {
       return;
     }
+    final selectedIndex = ttsService.currentParagraphIndex;
+    final controller = ScrollController(
+      initialScrollOffset: max(0.0, (selectedIndex - 2) * 88.0),
+    );
 
     showModalBottomSheet<void>(
       context: context,
@@ -223,6 +235,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: SizedBox(
             height: MediaQuery.of(context).size.height * 0.72,
             child: ListView.builder(
+              controller: controller,
+              itemExtent: 88,
               itemCount: ttsService.paragraphCount,
               itemBuilder: (context, index) {
                 final preview = ttsService.paragraphs[index];
@@ -243,6 +257,96 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.of(context).pop();
                     unawaited(ttsService.playFromParagraph(index));
                   },
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showReaderPopup() {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        final dialogWidth = min(MediaQuery.sizeOf(context).width * 0.92, 640.0);
+        final dialogHeight =
+            min(MediaQuery.sizeOf(context).height * 0.78, 720.0);
+
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: SizedBox(
+            width: dialogWidth,
+            height: dialogHeight,
+            child: Consumer2<NovelImportController, TtsService>(
+              builder: (context, importer, ttsService, _) {
+                final colorScheme = Theme.of(context).colorScheme;
+                final activeTitle = importer.activeChapter?.title ?? '';
+                final chapterText =
+                    activeTitle.trim().isNotEmpty ? activeTitle : 'Manual text';
+
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Now reading',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Minimize',
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.minimize),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        chapterText,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Paragraph ${ttsService.currentParagraphIndex + 1}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 18),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Text(
+                            ttsService.currentParagraph,
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  height: 1.6,
+                                  color: colorScheme.primary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.minimize),
+                          label: const Text('Minimize'),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
@@ -295,11 +399,23 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (importer.isImporting && !_isImportDialogOpen) {
+        if (_isImportDialogMinimized) {
+          return;
+        }
         _isImportDialogOpen = true;
         showDialog<void>(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const _ImportProgressDialog(),
+          builder: (context) => _ImportProgressDialog(
+            onMinimize: () {
+              Navigator.of(context, rootNavigator: true).pop();
+              if (mounted) {
+                setState(() {
+                  _isImportDialogMinimized = true;
+                });
+              }
+            },
+          ),
         ).then((_) {
           _isImportDialogOpen = false;
         });
@@ -308,6 +424,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (!importer.isImporting && _isImportDialogOpen) {
         Navigator.of(context, rootNavigator: true).pop();
+        return;
+      }
+
+      if (!importer.isImporting && _isImportDialogMinimized) {
+        setState(() {
+          _isImportDialogMinimized = false;
+        });
       }
     });
   }
@@ -399,6 +522,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   children: [
+                    if (importer.isImporting && _isImportDialogMinimized)
+                      _ImportMiniBar(
+                        importer: importer,
+                        onOpenProgress: () {
+                          setState(() {
+                            _isImportDialogMinimized = false;
+                          });
+                        },
+                        onStop: () => unawaited(importer.cancelImport()),
+                      ),
                     if (!importer.isImporting && importer.hasPendingSharedUrl)
                       _ImportStatusCard(
                         importer: importer,
@@ -414,7 +547,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     if (importer.activeNovel != null) ...[
-                      if (!importer.isImporting && importer.hasPendingSharedUrl)
+                      if (importer.isImporting && _isImportDialogMinimized)
+                        const SizedBox(height: 16)
+                      else if (!importer.isImporting &&
+                          importer.hasPendingSharedUrl)
                         const SizedBox(height: 16),
                       _ActiveNovelCard(
                         importer: importer,
@@ -489,6 +625,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ttsService: ttsService,
                         chapterLabel: importer.activeChapter?.title,
                         onOpenParagraphs: _showParagraphSheet,
+                        onOpenPopup: _showReaderPopup,
                       ),
                     ],
                   ],
@@ -529,7 +666,11 @@ class _ChapterBadge extends StatelessWidget {
 }
 
 class _ImportProgressDialog extends StatelessWidget {
-  const _ImportProgressDialog();
+  const _ImportProgressDialog({
+    required this.onMinimize,
+  });
+
+  final VoidCallback onMinimize;
 
   @override
   Widget build(BuildContext context) {
@@ -578,6 +719,11 @@ class _ImportProgressDialog extends StatelessWidget {
             ),
             actions: [
               TextButton.icon(
+                onPressed: onMinimize,
+                icon: const Icon(Icons.minimize),
+                label: const Text('Minimize'),
+              ),
+              TextButton.icon(
                 onPressed: importer.isCancellingImport
                     ? null
                     : () => unawaited(importer.cancelImport()),
@@ -591,6 +737,69 @@ class _ImportProgressDialog extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _ImportMiniBar extends StatelessWidget {
+  const _ImportMiniBar({
+    required this.importer,
+    required this.onOpenProgress,
+    required this.onStop,
+  });
+
+  final NovelImportController importer;
+  final VoidCallback onOpenProgress;
+  final VoidCallback onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    final progressPercent = importer.importProgress == null
+        ? null
+        : (importer.importProgress! * 100).clamp(0, 100).round();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Importing web novel',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: onOpenProgress,
+                  icon: const Icon(Icons.open_in_full),
+                  label: const Text('Open'),
+                ),
+              ],
+            ),
+            if (importer.importStatus != null) ...[
+              const SizedBox(height: 8),
+              Text(importer.importStatus!),
+            ],
+            const SizedBox(height: 12),
+            LinearProgressIndicator(value: importer.importProgress),
+            if (progressPercent != null) ...[
+              const SizedBox(height: 10),
+              Text('$progressPercent% complete'),
+            ],
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: importer.isCancellingImport ? null : onStop,
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: Text(
+                importer.isCancellingImport ? 'Stopping...' : 'Stop download',
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -948,11 +1157,13 @@ class _NowReadingCard extends StatelessWidget {
     required this.ttsService,
     required this.chapterLabel,
     required this.onOpenParagraphs,
+    required this.onOpenPopup,
   });
 
   final TtsService ttsService;
   final String? chapterLabel;
   final VoidCallback onOpenParagraphs;
+  final VoidCallback onOpenPopup;
 
   @override
   Widget build(BuildContext context) {
@@ -988,7 +1199,8 @@ class _NowReadingCard extends StatelessWidget {
               Text(
                 chapterText,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurface,
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w700,
                     ),
               ),
             ],
@@ -999,18 +1211,27 @@ class _NowReadingCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     height: 1.45,
-                    color: colorScheme.onSurface,
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w500,
                   ),
             ),
             if (ttsService.paragraphCount > 0) ...[
               const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: onOpenParagraphs,
-                  icon: const Icon(Icons.format_list_numbered),
-                  label: const Text('Play from paragraph'),
-                ),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: onOpenParagraphs,
+                    icon: const Icon(Icons.format_list_numbered),
+                    label: const Text('Play from paragraph'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: onOpenPopup,
+                    icon: const Icon(Icons.open_in_full),
+                    label: const Text('Popup reader'),
+                  ),
+                ],
               ),
             ],
           ],

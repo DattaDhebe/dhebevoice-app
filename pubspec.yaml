@@ -42,6 +42,7 @@ dependencies:
   provider: ^6.1.5
   receive_sharing_intent: ^1.8.1
   shared_preferences: ^2.5.3
+  syncfusion_flutter_pdf: ^33.2.4
 
 dev_dependencies:
   flutter_test:

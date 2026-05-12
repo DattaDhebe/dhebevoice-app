@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -606,6 +607,10 @@ class TtsService extends ChangeNotifier {
     _pausedCharIndex = startOffset;
     _currentParagraphIndex = chunks.first.paragraphIndex;
     notifyListeners();
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      unawaited(AudioService.androidForceEnableMediaButtons());
+    }
 
     await _syncTtsOptions();
     if (shouldStopBeforeQueueing) {

@@ -157,6 +157,7 @@ class NovelImportController extends ChangeNotifier {
           _importStatus = 'Imported text file ${imported.name}.';
           break;
         case ImportedReaderFileKind.epub:
+        case ImportedReaderFileKind.pdf:
           final book = imported.book!;
           final updated = [..._library];
           final existingIndex = updated.indexWhere(
@@ -171,8 +172,13 @@ class NovelImportController extends ChangeNotifier {
           _library = updated;
           await _novelLibraryService.saveLibrary(updated);
           await selectNovel(book.id, chapterIndex: 0);
+          final importType = switch (imported.kind) {
+            ImportedReaderFileKind.epub => 'EPUB',
+            ImportedReaderFileKind.pdf => 'PDF',
+            ImportedReaderFileKind.text => 'text',
+          };
           _importStatus =
-              'Imported EPUB ${book.title} with ${book.chapters.length} chapters.';
+              'Imported $importType ${book.title} with ${book.chapters.length} sections.';
           break;
       }
     } catch (error) {

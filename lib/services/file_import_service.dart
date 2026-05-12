@@ -5,10 +5,11 @@ import 'dart:typed_data';
 import 'package:epub_pro/epub_pro.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../models/novel_book.dart';
 
-enum ImportedReaderFileKind { text, epub }
+enum ImportedReaderFileKind { text, epub, pdf }
 
 class ImportedReaderFile {
   const ImportedReaderFile._({
@@ -40,6 +41,17 @@ class ImportedReaderFile {
     );
   }
 
+  factory ImportedReaderFile.pdf({
+    required String name,
+    required NovelBook book,
+  }) {
+    return ImportedReaderFile._(
+      kind: ImportedReaderFileKind.pdf,
+      name: name,
+      book: book,
+    );
+  }
+
   final ImportedReaderFileKind kind;
   final String name;
   final String? text;
@@ -50,7 +62,7 @@ class FileImportService {
   Future<ImportedReaderFile?> importReaderFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['txt', 'epub'],
+      allowedExtensions: const ['txt', 'epub', 'pdf'],
       withData: true,
     );
 
@@ -64,6 +76,13 @@ class FileImportService {
     final extension = _fileExtension(fileName);
 
     switch (extension) {
+      case 'pdf':
+        final bytes = await _readBytes(file);
+        if (bytes == null || bytes.isEmpty) {
+          return null;
+        }
+        final book = _parsePdf(bytes, fileName);
+        return ImportedReaderFile.pdf(name: fileName, book: book);
       case 'epub':
         final bytes = await _readBytes(file);
         if (bytes == null || bytes.isEmpty) {
@@ -168,6 +187,58 @@ class FileImportService {
     );
   }
 
+  NovelBook _parsePdf(Uint8List bytes, String fileName) {
+    final document = PdfDocument(inputBytes: bytes);
+    try {
+      final extractor = PdfTextExtractor(document);
+      final chapters = <NovelChapter>[];
+
+      for (var pageIndex = 0; pageIndex < document.pages.count; pageIndex++) {
+        final pageNumber = pageIndex + 1;
+        final text = _normalizePdfText(
+          extractor.extractText(
+            startPageIndex: pageIndex,
+            endPageIndex: pageIndex,
+          ),
+        );
+        if (text.isEmpty) {
+          continue;
+        }
+
+        chapters.add(
+          NovelChapter(
+            title: 'Page $pageNumber',
+            url: 'local-pdf://$fileName#$pageNumber',
+            content: text,
+            order: chapters.length,
+          ),
+        );
+      }
+
+      if (chapters.isEmpty) {
+        throw Exception(
+          'DhebeVoice could not find readable text inside this PDF.',
+        );
+      }
+
+      final rawTitle = document.documentInformation.title;
+      final title = rawTitle.trim().isNotEmpty
+          ? rawTitle.trim()
+          : _fileNameWithoutExtension(fileName);
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+      return NovelBook(
+        id: 'pdf_$timestamp',
+        title: title,
+        sourceUrl: 'local-pdf://$fileName',
+        importedAt: DateTime.now(),
+        chapters: chapters,
+      );
+    } finally {
+      document.dispose();
+    }
+  }
+
   String _extractPlainText(String? htmlContent) {
     if (htmlContent == null || htmlContent.trim().isEmpty) {
       return '';
@@ -196,6 +267,19 @@ class FileImportService {
       return '';
     }
     return input.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  String _normalizePdfText(String? input) {
+    if (input == null || input.trim().isEmpty) {
+      return '';
+    }
+
+    final lines = input
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    return lines.join('\n\n');
   }
 
   String _fileExtension(String fileName) {

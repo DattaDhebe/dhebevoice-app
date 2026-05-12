@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../services/novel_import_controller.dart';
 import '../services/theme_controller.dart';
 import '../services/tts_service.dart';
 import '../widgets/tts_settings_panel.dart';
@@ -42,8 +41,8 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<ThemeController, TtsService, NovelImportController>(
-      builder: (context, themeController, ttsService, importer, _) {
+    return Consumer2<ThemeController, TtsService>(
+      builder: (context, themeController, ttsService, _) {
         return Scaffold(
           appBar: AppBar(
             title: const Text('Settings'),
@@ -88,62 +87,6 @@ class SettingsScreen extends StatelessWidget {
                             themeController.setThemeMode(selection.first);
                           }
                         },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Website Access Mode',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Use the current mobile browser mode by default, or switch to another profile when a site returns 403.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        initialValue: importer.selectedWebAccessModeId,
-                        items: importer.availableWebAccessModes
-                            .map(
-                              (mode) => DropdownMenuItem(
-                                value: mode.id,
-                                child: Text(
-                                  mode.label,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            importer.setWebAccessMode(value);
-                          }
-                        },
-                        decoration: const InputDecoration(
-                          hintText: 'Select a website access mode',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        importer.availableWebAccessModes
-                            .firstWhere(
-                              (mode) =>
-                                  mode.id == importer.selectedWebAccessModeId,
-                              orElse: () =>
-                                  importer.availableWebAccessModes.first,
-                            )
-                            .description,
-                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),
