@@ -1185,14 +1185,20 @@ class _NowReadingCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const Spacer(),
-                Text(
-                  'Paragraph ${ttsService.currentParagraphIndex + 1}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
+                FilledButton.tonalIcon(
+                  onPressed: onOpenPopup,
+                  icon: const Icon(Icons.open_in_full),
+                  label: const Text('View now'),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Paragraph ${ttsService.currentParagraphIndex + 1}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
             if (chapterLabel != null) ...[
               const SizedBox(height: 8),
@@ -1225,11 +1231,6 @@ class _NowReadingCard extends StatelessWidget {
                     onPressed: onOpenParagraphs,
                     icon: const Icon(Icons.format_list_numbered),
                     label: const Text('Play from paragraph'),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: onOpenPopup,
-                    icon: const Icon(Icons.open_in_full),
-                    label: const Text('Popup reader'),
                   ),
                 ],
               ),
