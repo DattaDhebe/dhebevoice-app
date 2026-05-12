@@ -1,14 +1,20 @@
 package com.textreader.voiceapp
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceActivity() {
+    private val notificationPermissionRequestCode = 2026
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -39,9 +45,35 @@ class MainActivity : AudioServiceActivity() {
                     result.success(null)
                 }
 
+                "ensureNotificationPermission" -> {
+                    result.success(ensureNotificationPermission())
+                }
+
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun ensureNotificationPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return true
+        }
+
+        val alreadyGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (alreadyGranted) {
+            return true
+        }
+
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            notificationPermissionRequestCode
+        )
+        return false
     }
 
     private fun ensurePlaybackChannel(

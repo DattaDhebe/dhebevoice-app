@@ -15,13 +15,14 @@ import 'services/theme_controller.dart';
 import 'services/tts_service.dart';
 import 'services/web_novel_import_service.dart';
 
-const _playbackChannelId = 'com.textreader.voiceapp.playback.v3';
+const _playbackChannelId = 'com.textreader.voiceapp.playback.v4';
 const _systemChannel = MethodChannel('com.textreader.voiceapp/system');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await _ensureAndroidPlaybackChannel();
+  await _ensureAndroidNotificationPermission();
 
   final storageService = StorageService();
   await storageService.initialize();
@@ -85,6 +86,18 @@ Future<void> _ensureAndroidPlaybackChannel() async {
     );
   } on PlatformException {
     // The audio_service plugin can still create its own fallback channel.
+  }
+}
+
+Future<void> _ensureAndroidNotificationPermission() async {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return;
+  }
+
+  try {
+    await _systemChannel.invokeMethod<bool>('ensureNotificationPermission');
+  } on PlatformException {
+    // Playback can still continue even if the permission prompt fails.
   }
 }
 

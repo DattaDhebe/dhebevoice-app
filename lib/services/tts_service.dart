@@ -776,6 +776,9 @@ class TtsService extends ChangeNotifier {
     _playbackState = ReaderPlaybackState.paused;
     _errorMessage = null;
     await _flutterTts.pause();
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      unawaited(AudioService.androidForceEnableMediaButtons());
+    }
     await _storageService.savePosition(_currentCharIndex);
     notifyListeners();
   }

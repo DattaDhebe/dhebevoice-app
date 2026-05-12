@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/novel_book.dart';
 import 'novel_import_controller.dart';
@@ -182,5 +185,11 @@ class ReaderAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
             : _novelImportController.activeChapterIndex,
       ),
     );
+
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        (_ttsService.isPlaying || _ttsService.isPaused)) {
+      unawaited(AudioService.androidForceEnableMediaButtons());
+    }
   }
 }
