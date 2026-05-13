@@ -101,8 +101,7 @@ class NovelImportController extends ChangeNotifier {
     _pendingSharedUrl = url.trim();
     _errorMessage = null;
     _importProgress = null;
-    _importStatus =
-        'Shared link ready. Choose a website access mode, then start import.';
+    _importStatus = 'Shared link ready. Review it, then start import.';
     notifyListeners();
   }
 

@@ -12,23 +12,8 @@ class WebNovelImportService {
   static const accessModes = [
     WebAccessMode(
       id: defaultAccessModeId,
-      label: 'Mobile browser (Current)',
-      description: 'Keeps the current Android Chrome-style import behavior.',
-    ),
-    WebAccessMode(
-      id: 'desktop_browser',
-      label: 'Desktop browser',
-      description: 'Uses desktop Chrome headers for sites that block mobile requests.',
-    ),
-    WebAccessMode(
-      id: 'browser_with_referer',
-      label: 'Browser + referer',
-      description: 'Adds a matching site referer and broader browser headers.',
-    ),
-    WebAccessMode(
-      id: 'googlebot',
-      label: 'Googlebot',
-      description: 'Tries crawler-style headers for strict 403 or anti-bot blocks.',
+      label: 'Standard browser',
+      description: 'Uses the app’s normal browser-style web import behavior.',
     ),
   ];
 
@@ -151,11 +136,11 @@ class WebNovelImportService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       if (response.statusCode == 403) {
         throw Exception(
-          '${uri.host} blocked ${_accessModeLabel(resolvedAccessModeId)} with a 403 error. Choose another website access mode and try again.',
+          '${uri.host} blocked the web import request with a 403 error.',
         );
       }
       throw Exception(
-        'Could not open ${uri.host} (${response.statusCode}) using ${_accessModeLabel(resolvedAccessModeId)}.',
+        'Could not open ${uri.host} (${response.statusCode}) for web import.',
       );
     }
 
@@ -546,67 +531,16 @@ class WebNovelImportService {
   }
 
   Map<String, String> _headersForMode(Uri uri, String accessModeId) {
-    final referer = _rootUri(uri).toString();
-    const common = {
+    return const {
       'Accept':
           'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache',
+      'User-Agent':
+          'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/136.0 Mobile Safari/537.36',
+      'Upgrade-Insecure-Requests': '1',
     };
-
-    switch (normalizeAccessModeId(accessModeId)) {
-      case 'desktop_browser':
-        return {
-          ...common,
-          'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/136.0.0.0 Safari/537.36',
-          'Upgrade-Insecure-Requests': '1',
-        };
-      case 'browser_with_referer':
-        return {
-          ...common,
-          'User-Agent':
-              'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/136.0 Mobile Safari/537.36',
-          'Referer': referer,
-          'Origin': referer.endsWith('/')
-              ? referer.substring(0, referer.length - 1)
-              : referer,
-          'Upgrade-Insecure-Requests': '1',
-        };
-      case 'googlebot':
-        return {
-          ...common,
-          'User-Agent':
-              'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-          'Referer': referer,
-        };
-      case defaultAccessModeId:
-      default:
-        return {
-          ...common,
-          'User-Agent':
-              'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/136.0 Mobile Safari/537.36',
-        };
-    }
-  }
-
-  String _accessModeLabel(String accessModeId) {
-    return accessModes
-        .firstWhere(
-          (mode) => mode.id == normalizeAccessModeId(accessModeId),
-          orElse: () => accessModes.first,
-        )
-        .label;
-  }
-
-  Uri _rootUri(Uri uri) {
-    return Uri(
-      scheme: uri.scheme,
-      host: uri.host,
-      port: uri.hasPort ? uri.port : null,
-      path: '/',
-    );
   }
 
   bool _shouldStop(bool Function()? shouldCancel) {

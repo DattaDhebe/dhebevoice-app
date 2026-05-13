@@ -9,7 +9,6 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import '../models/novel_book.dart';
 import '../services/novel_import_controller.dart';
 import '../services/tts_service.dart';
-import '../services/web_novel_import_service.dart';
 import '../widgets/player_controls.dart';
 import 'settings_screen.dart';
 
@@ -58,76 +57,47 @@ class _HomeScreenState extends State<HomeScreen> {
     final controller = TextEditingController(
       text: importer.pendingSharedUrl ?? '',
     );
-    var selectedModeId = importer.selectedWebAccessModeId;
 
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            final selectedMode = importer.availableWebAccessModes.firstWhere(
-              (mode) => mode.id == selectedModeId,
-              orElse: () => importer.availableWebAccessModes.first,
-            );
-
-            return AlertDialog(
-              scrollable: true,
-              title: const Text('Import novel link'),
-              content: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    keyboardType: TextInputType.url,
-                    decoration: const InputDecoration(
-                      hintText: 'Paste chapter or contents URL',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _AccessModePickerField(
-                    label: 'Website access mode',
-                    modes: importer.availableWebAccessModes,
-                    selectedModeId: selectedModeId,
-                    onSelected: (value) {
-                      setState(() {
-                        selectedModeId = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    selectedMode.description,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Import only text you own, are licensed to access, or that is in the public domain.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
+        return AlertDialog(
+          scrollable: true,
+          title: const Text('Import novel link'),
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  hintText: 'Paste chapter or contents URL',
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    await importer.importNovelFromUrl(
-                      controller.text,
-                      accessModeId: selectedModeId,
-                    );
-                  },
-                  child: const Text('Import'),
-                ),
-              ],
-            );
-          },
+              const SizedBox(height: 12),
+              Text(
+                'Import only text you own, are licensed to access, or that is in the public domain.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await importer.importNovelFromUrl(controller.text);
+              },
+              child: const Text('Import'),
+            ),
+          ],
         );
       },
     );
@@ -600,9 +570,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         onStartPendingImport: () => unawaited(
                           importer.importPendingSharedUrl(),
                         ),
-                        onModeChanged: (value) => unawaited(
-                          importer.setWebAccessMode(value),
-                        ),
                         onClearSharedLink: () => unawaited(
                           importer.clearPendingSharedUrl(),
                         ),
@@ -871,24 +838,18 @@ class _ImportStatusCard extends StatelessWidget {
     required this.importer,
     required this.onStartImport,
     required this.onStartPendingImport,
-    required this.onModeChanged,
     required this.onClearSharedLink,
   });
 
   final NovelImportController importer;
   final VoidCallback onStartImport;
   final VoidCallback onStartPendingImport;
-  final ValueChanged<String> onModeChanged;
   final VoidCallback onClearSharedLink;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasPendingSharedUrl = importer.hasPendingSharedUrl;
-    final selectedMode = importer.availableWebAccessModes.firstWhere(
-      (mode) => mode.id == importer.selectedWebAccessModeId,
-      orElse: () => importer.availableWebAccessModes.first,
-    );
     final pendingUri = hasPendingSharedUrl
         ? Uri.tryParse(importer.pendingSharedUrl!)
         : null;
@@ -971,19 +932,6 @@ class _ImportStatusCard extends StatelessWidget {
             ],
             if (hasPendingSharedUrl && !importer.isImporting) ...[
               const SizedBox(height: 16),
-              _AccessModePickerField(
-                label: 'Website access mode',
-                modes: importer.availableWebAccessModes,
-                selectedModeId: importer.selectedWebAccessModeId,
-                onSelected: onModeChanged,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                selectedMode.description,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-              ),
               const SizedBox(height: 8),
               Text(
                 'Only import text you own, are licensed to access, or that is in the public domain.',
@@ -1024,90 +972,6 @@ class _ImportStatusCard extends StatelessWidget {
                 ),
               ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AccessModePickerField extends StatelessWidget {
-  const _AccessModePickerField({
-    required this.label,
-    required this.modes,
-    required this.selectedModeId,
-    required this.onSelected,
-  });
-
-  final String label;
-  final List<WebAccessMode> modes;
-  final String selectedModeId;
-  final ValueChanged<String> onSelected;
-
-  Future<void> _showModeSheet(BuildContext context) async {
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        return SafeArea(
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-            itemCount: modes.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final mode = modes[index];
-              final isSelected = mode.id == selectedModeId;
-              return ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                title: Text(
-                  mode.label,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w600,
-                      ),
-                ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(mode.description),
-                ),
-                trailing: isSelected
-                    ? Icon(Icons.check_circle, color: colorScheme.primary)
-                    : const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).pop(mode.id),
-              );
-            },
-          ),
-        );
-      },
-    );
-
-    if (selected != null && selected != selectedModeId) {
-      onSelected(selected);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final selectedMode = modes.firstWhere(
-      (mode) => mode.id == selectedModeId,
-      orElse: () => modes.first,
-    );
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(24),
-      onTap: () => unawaited(_showModeSheet(context)),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          suffixIcon: const Icon(Icons.unfold_more),
-        ),
-        child: Text(
-          selectedMode.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyLarge,
         ),
       ),
     );
