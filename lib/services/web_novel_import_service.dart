@@ -49,7 +49,7 @@ class WebNovelImportService {
     if (result.book != null) {
       return result.book!;
     }
-    throw Exception('Import stopped before any chapters were downloaded.');
+    throw Exception('Import stopped before any chapters were imported.');
   }
 
   Future<NovelImportResult> importNovelResultFromUrl(
@@ -76,7 +76,7 @@ class WebNovelImportService {
         index: 1,
         rawTitle: _extractChapterTitle(firstPage.document, 1),
       );
-      onProgress?.call(1, null, 'Downloading $firstChapterLabel');
+      onProgress?.call(1, null, 'Importing $firstChapterLabel');
     }
 
     final chapters = looksLikeChapter
@@ -224,7 +224,7 @@ class WebNovelImportService {
         uri: nextUri,
         index: index + 1,
       );
-      onProgress?.call(index + 1, null, 'Downloading $nextChapterLabel');
+      onProgress?.call(index + 1, null, 'Importing $nextChapterLabel');
       current = await _fetchPage(nextUri, accessModeId: accessModeId);
     }
 
@@ -263,7 +263,7 @@ class WebNovelImportService {
       onProgress?.call(
         chapterNumber,
         links.length,
-        'Downloading $chapterLabel',
+        'Importing $chapterLabel',
       );
       final page = await _fetchPage(entry.uri, accessModeId: accessModeId);
       final content = _extractReadableText(page.document);

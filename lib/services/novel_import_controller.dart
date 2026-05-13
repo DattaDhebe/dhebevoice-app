@@ -101,7 +101,8 @@ class NovelImportController extends ChangeNotifier {
     _pendingSharedUrl = url.trim();
     _errorMessage = null;
     _importProgress = null;
-    _importStatus = 'Shared link ready. Choose a website access mode, then start import.';
+    _importStatus =
+        'Shared link ready. Choose a website access mode, then start import.';
     notifyListeners();
   }
 
@@ -251,7 +252,7 @@ class NovelImportController extends ChangeNotifier {
       if (result.wasCancelled) {
         _importStatus = imported == null
             ? 'Import stopped.'
-            : 'Stopped after ${imported.chapters.length} chapters. Saved to Book List.';
+            : 'Stopped after ${imported.chapters.length} chapters. Saved to Books List.';
       } else if (imported != null) {
         _importStatus = 'Imported ${imported.chapters.length} chapters.';
         completedWithoutCancellation = true;

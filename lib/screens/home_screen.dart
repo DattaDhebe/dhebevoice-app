@@ -101,6 +101,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     selectedMode.description,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Import only text you own, are licensed to access, or that is in the public domain.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
                 ],
               ),
               actions: [
@@ -147,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         return Padding(
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                           child: Text(
-                            'Book List',
+                            'Books List',
                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -762,7 +769,7 @@ class _ImportProgressDialog extends StatelessWidget {
                   ] else ...[
                     const SizedBox(height: 10),
                     Text(
-                      'Following chapter links and downloading text...',
+                      'Following chapter links and importing text...',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurface,
                           ),
@@ -785,7 +792,7 @@ class _ImportProgressDialog extends StatelessWidget {
                 label: Text(
                   importer.isCancellingImport
                       ? 'Stopping...'
-                      : 'Stop download',
+                      : 'Stop import',
                 ),
               ),
             ],
@@ -849,7 +856,7 @@ class _ImportMiniBar extends StatelessWidget {
               onPressed: importer.isCancellingImport ? null : onStop,
               icon: const Icon(Icons.stop_circle_outlined),
               label: Text(
-                importer.isCancellingImport ? 'Stopping...' : 'Stop download',
+                importer.isCancellingImport ? 'Stopping...' : 'Stop import',
               ),
             ),
           ],
@@ -977,6 +984,13 @@ class _ImportStatusCard extends StatelessWidget {
                       color: colorScheme.onSurfaceVariant,
                     ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                'Only import text you own, are licensed to access, or that is in the public domain.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+              ),
             ],
             const SizedBox(height: 16),
             if (importer.isImporting)
@@ -988,7 +1002,7 @@ class _ImportStatusCard extends StatelessWidget {
                 label: Text(
                   importer.isCancellingImport
                       ? 'Stopping...'
-                      : 'Stop download',
+                      : 'Stop import',
                 ),
               )
             else

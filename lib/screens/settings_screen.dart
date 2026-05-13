@@ -93,6 +93,36 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Content & Privacy',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'DhebeVoice is a personal reader for text you paste, import from local files, or choose to import from a link.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Import only content you own, are licensed to access, or that is in the public domain. DhebeVoice does not host books or grant rights to copyrighted material.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Before publishing on Google Play, add a public privacy policy URL in Play Console and complete the Data safety form with your real data practices.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               TtsSettingsPanel(
                 languages: ttsService.availableLanguages(),
                 selectedLanguage: ttsService.selectedLanguage,
