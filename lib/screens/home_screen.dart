@@ -226,7 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Expanded(
                         child: Text(
                           chapter.title,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1252,7 +1252,7 @@ class _NowReadingCard extends StatelessWidget {
             Text(
               'Paragraph ${ttsService.currentParagraphIndex + 1}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurface,
+                    color: colorScheme.primary,
                     fontWeight: FontWeight.w600,
                   ),
             ),
@@ -1261,7 +1261,7 @@ class _NowReadingCard extends StatelessWidget {
               Text(
                 chapterText,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.primary,
+                      color: colorScheme.onSurface,
                       fontWeight: FontWeight.w700,
                     ),
               ),
