@@ -15,8 +15,8 @@ import 'services/theme_controller.dart';
 import 'services/tts_service.dart';
 import 'services/web_novel_import_service.dart';
 
-const _playbackChannelId = 'com.textreader.voiceapp.playback.v5';
-const _systemChannel = MethodChannel('com.textreader.voiceapp/system');
+const _playbackChannelId = 'com.dhebe.dhebevoice.playback.v5';
+const _systemChannel = MethodChannel('com.dhebe.dhebevoice/system');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

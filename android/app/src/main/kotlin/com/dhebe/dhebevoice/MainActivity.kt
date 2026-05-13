@@ -1,4 +1,4 @@
-package com.textreader.voiceapp
+package com.dhebe.dhebevoice
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -20,7 +20,7 @@ class MainActivity : AudioServiceActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            "com.textreader.voiceapp/system"
+            "com.dhebe.dhebevoice/system"
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "ensurePlaybackChannel" -> {
