@@ -528,6 +528,20 @@ class TtsService extends ChangeNotifier {
     );
   }
 
+  Future<void> playPreviousParagraph() async {
+    if (paragraphCount == 0 || _currentParagraphIndex <= 0) {
+      return;
+    }
+    await playFromParagraph(_currentParagraphIndex - 1);
+  }
+
+  Future<void> playNextParagraph() async {
+    if (paragraphCount == 0 || _currentParagraphIndex >= paragraphCount - 1) {
+      return;
+    }
+    await playFromParagraph(_currentParagraphIndex + 1);
+  }
+
   Future<void> _resumePlayback() async {
     final resumeOffset = min(
       max(_pausedCharIndex, _activeChunkOffset),

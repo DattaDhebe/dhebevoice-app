@@ -141,9 +141,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Text('Imported web novels will appear here.'),
                   )
                 : ListView.builder(
-                    itemCount: importer.library.length,
+                    itemCount: importer.library.length + 1,
                     itemBuilder: (context, index) {
-                      final book = importer.library[index];
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                          child: Text(
+                            'Book List',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        );
+                      }
+
+                      final book = importer.library[index - 1];
                       return ListTile(
                         title: Text(book.title),
                         subtitle: Text(
@@ -201,8 +213,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 final chapterBadge = _chapterBadgeLabel(chapter, index);
                 return ListTile(
                   selected: index == importer.activeChapterIndex,
-                  leading: _ChapterBadge(label: chapterBadge),
-                  title: Text(chapter.title),
+                  title: Row(
+                    children: [
+                      SizedBox(
+                        width: 78,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _ChapterBadge(label: chapterBadge),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          chapter.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                   onTap: () {
                     Navigator.of(context).pop();
                     unawaited(importer.selectChapter(index));
@@ -267,20 +296,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showReaderPopup() {
+    final audioHandler = context.read<AudioHandler>();
+
     showDialog<void>(
       context: context,
       builder: (context) {
         final dialogWidth = min(MediaQuery.sizeOf(context).width * 0.9, 620.0);
-        final maxDialogHeight =
-            min(MediaQuery.sizeOf(context).height * 0.62, 560.0);
+        final dialogHeight =
+            min(MediaQuery.sizeOf(context).height * 0.6, 540.0);
 
         return Dialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: dialogWidth,
-              maxHeight: maxDialogHeight,
-            ),
+          child: SizedBox(
+            width: dialogWidth,
+            height: dialogHeight,
             child: Consumer2<NovelImportController, TtsService>(
               builder: (context, importer, ttsService, _) {
                 final colorScheme = Theme.of(context).colorScheme;
@@ -299,13 +328,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           Expanded(
                             child: Text(
                               'Now reading',
-                              style: Theme.of(context).textTheme.titleLarge,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
                             ),
                           ),
                           IconButton(
-                            tooltip: 'Minimize',
+                            tooltip: 'Close',
                             onPressed: () => Navigator.of(context).pop(),
-                            icon: const Icon(Icons.minimize),
+                            icon: const Icon(Icons.close),
                           ),
                         ],
                       ),
@@ -313,21 +344,39 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text(
                         chapterText,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: colorScheme.primary,
                               fontWeight: FontWeight.w700,
                             ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Paragraph ${ttsService.currentParagraphIndex + 1}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          IconButton.filledTonal(
+                            onPressed: ttsService.currentParagraphIndex > 0
+                                ? () => unawaited(ttsService.playPreviousParagraph())
+                                : null,
+                            icon: const Icon(Icons.chevron_left),
+                          ),
+                          Expanded(
+                            child: Text(
+                              'Paragraph ${ttsService.currentParagraphIndex + 1}',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                             ),
+                          ),
+                          IconButton.filledTonal(
+                            onPressed: ttsService.currentParagraphIndex <
+                                    ttsService.paragraphCount - 1
+                                ? () => unawaited(ttsService.playNextParagraph())
+                                : null,
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 18),
-                      Flexible(
-                        fit: FlexFit.loose,
+                      Expanded(
                         child: SingleChildScrollView(
                           child: Text(
                             ttsService.currentParagraph,
@@ -339,6 +388,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      PlayerControls(
+                        isPlaying: ttsService.isPlaying,
+                        canResume:
+                            ttsService.isPaused || ttsService.currentCharIndex > 0,
+                        onPlay: () => unawaited(audioHandler.play()),
+                        onPause: () => unawaited(audioHandler.pause()),
+                        onStop: () => unawaited(audioHandler.stop()),
+                        wrapInSafeArea: false,
                       ),
                     ],
                   ),
@@ -474,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               IconButton(
-                tooltip: 'Import .txt or .epub file',
+                tooltip: 'Import .txt, .epub, or .pdf file',
                 onPressed: () async {
                   await importer.importLocalFile();
                 },
@@ -595,7 +654,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                             decoration: const InputDecoration(
                               hintText:
-                                  'Paste text here, import a .txt or .epub file, or share a novel link from your browser.',
+                                  'Paste text here, import a .txt, .epub, or .pdf file, or share a novel link from your browser.',
                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
@@ -1177,13 +1236,15 @@ class _NowReadingCard extends StatelessWidget {
               children: [
                 Text(
                   'Now reading',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
                 const Spacer(),
                 FilledButton.tonalIcon(
                   onPressed: onOpenPopup,
                   icon: const Icon(Icons.open_in_full),
-                  label: const Text('View now'),
+                  label: const Text('View full'),
                 ),
               ],
             ),

@@ -8,6 +8,8 @@ class PlayerControls extends StatelessWidget {
     required this.onPlay,
     required this.onPause,
     required this.onStop,
+    this.compactIconsOnly = false,
+    this.wrapInSafeArea = true,
   });
 
   final bool isPlaying;
@@ -15,6 +17,8 @@ class PlayerControls extends StatelessWidget {
   final VoidCallback onPlay;
   final VoidCallback onPause;
   final VoidCallback onStop;
+  final bool compactIconsOnly;
+  final bool wrapInSafeArea;
 
   @override
   Widget build(BuildContext context) {
@@ -29,58 +33,85 @@ class PlayerControls extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
-    final playButton = FilledButton.tonalIcon(
-      style: filledStyle,
-      onPressed: isPlaying ? null : onPlay,
-      icon: Icon(
-        canResume ? Icons.play_circle_fill : Icons.play_arrow,
+    final playButton = compactIconsOnly
+        ? FilledButton.tonal(
+            style: filledStyle,
+            onPressed: isPlaying ? null : onPlay,
+            child: Icon(
+              canResume ? Icons.play_circle_fill : Icons.play_arrow,
+              size: 30,
+            ),
+          )
+        : FilledButton.tonalIcon(
+            style: filledStyle,
+            onPressed: isPlaying ? null : onPlay,
+            icon: Icon(
+              canResume ? Icons.play_circle_fill : Icons.play_arrow,
+            ),
+            label: Text(
+              canResume ? 'Resume' : 'Play',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+    final pauseButton = compactIconsOnly
+        ? OutlinedButton(
+            style: outlinedStyle,
+            onPressed: isPlaying ? onPause : null,
+            child: const Icon(Icons.pause, size: 28),
+          )
+        : OutlinedButton.icon(
+            style: outlinedStyle,
+            onPressed: isPlaying ? onPause : null,
+            icon: const Icon(Icons.pause),
+            label: const Text(
+              'Pause',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+    final stopButton = compactIconsOnly
+        ? OutlinedButton(
+            style: outlinedStyle,
+            onPressed: onStop,
+            child: const Icon(Icons.stop, size: 28),
+          )
+        : OutlinedButton.icon(
+            style: outlinedStyle,
+            onPressed: onStop,
+            icon: const Icon(Icons.stop),
+            label: const Text(
+              'Stop',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+
+    final controlsBody = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
-      label: Text(
-        canResume ? 'Resume' : 'Play',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-    final pauseButton = OutlinedButton.icon(
-      style: outlinedStyle,
-      onPressed: isPlaying ? onPause : null,
-      icon: const Icon(Icons.pause),
-      label: const Text(
-        'Pause',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-    final stopButton = OutlinedButton.icon(
-      style: outlinedStyle,
-      onPressed: onStop,
-      icon: const Icon(Icons.stop),
-      label: const Text(
-        'Stop',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          Expanded(flex: 11, child: playButton),
+          const SizedBox(width: 8),
+          Expanded(flex: 10, child: pauseButton),
+          const SizedBox(width: 8),
+          Expanded(flex: 9, child: stopButton),
+        ],
       ),
     );
 
+    if (!wrapInSafeArea) {
+      return controlsBody;
+    }
+
     return SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: colorScheme.outlineVariant),
-        ),
-        child: Row(
-          children: [
-            Expanded(flex: 11, child: playButton),
-            const SizedBox(width: 8),
-            Expanded(flex: 10, child: pauseButton),
-            const SizedBox(width: 8),
-            Expanded(flex: 9, child: stopButton),
-          ],
-        ),
-      ),
+      child: controlsBody,
     );
   }
 }

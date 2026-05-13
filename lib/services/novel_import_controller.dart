@@ -229,6 +229,8 @@ class NovelImportController extends ChangeNotifier {
       );
 
       final imported = result.book;
+      final shouldAutoSelectImported = imported != null && !result.wasCancelled;
+
       if (imported != null) {
         final updated = [..._library];
         final existingIndex = updated.indexWhere(
@@ -241,13 +243,15 @@ class NovelImportController extends ChangeNotifier {
         }
         _library = updated;
         await _novelLibraryService.saveLibrary(updated);
-        await selectNovel(imported.id, chapterIndex: 0);
+        if (shouldAutoSelectImported) {
+          await selectNovel(imported.id, chapterIndex: 0);
+        }
       }
 
       if (result.wasCancelled) {
         _importStatus = imported == null
             ? 'Import stopped.'
-            : 'Stopped after ${imported.chapters.length} chapters.';
+            : 'Stopped after ${imported.chapters.length} chapters. Saved to Book List.';
       } else if (imported != null) {
         _importStatus = 'Imported ${imported.chapters.length} chapters.';
         completedWithoutCancellation = true;

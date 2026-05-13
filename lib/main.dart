@@ -15,7 +15,7 @@ import 'services/theme_controller.dart';
 import 'services/tts_service.dart';
 import 'services/web_novel_import_service.dart';
 
-const _playbackChannelId = 'com.textreader.voiceapp.playback.v4';
+const _playbackChannelId = 'com.textreader.voiceapp.playback.v5';
 const _systemChannel = MethodChannel('com.textreader.voiceapp/system');
 
 Future<void> main() async {
@@ -55,8 +55,8 @@ Future<void> main() async {
       androidNotificationChannelName: 'DhebeVoice Playback',
       androidNotificationChannelDescription:
           'Playback controls for DhebeVoice reading sessions',
-      androidNotificationOngoing: false,
-      androidStopForegroundOnPause: false,
+      androidNotificationOngoing: true,
+      androidStopForegroundOnPause: true,
     ),
   );
 
