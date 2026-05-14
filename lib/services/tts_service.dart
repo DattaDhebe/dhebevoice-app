@@ -13,6 +13,8 @@ import 'storage_service.dart';
 
 enum ReaderPlaybackState { idle, playing, paused, stopped, completed, error }
 
+enum _PauseOrigin { none, user, system }
+
 class TtsService extends ChangeNotifier {
   static const _defaultLanguage = 'en-IN';
   static const _defaultVoicePattern = 'en-in-x-ene-local';
@@ -63,6 +65,8 @@ class TtsService extends ChangeNotifier {
   DateTime? _lastPlaybackActivityAt;
   Future<void> Function()? _playbackCompletedHandler;
   Timer? _playbackWatchdog;
+  Timer? _unexpectedPauseRecoveryTimer;
+  _PauseOrigin _pauseOrigin = _PauseOrigin.none;
 
   List<VoiceModel> get voices => _voices;
   ReaderPlaybackState get playbackState => _playbackState;
@@ -145,12 +149,18 @@ class TtsService extends ChangeNotifier {
       });
 
       _flutterTts.setPauseHandler(() {
+        final pauseOrigin = _pauseOrigin;
+        _pauseOrigin = _PauseOrigin.none;
         _stopPlaybackWatchdog();
         _playbackState = ReaderPlaybackState.paused;
         notifyListeners();
+        if (pauseOrigin == _PauseOrigin.none && _queuedChunks.isNotEmpty) {
+          _scheduleUnexpectedPauseRecovery();
+        }
       });
 
       _flutterTts.setContinueHandler(() {
+        _cancelUnexpectedPauseRecovery();
         _markPlaybackActivity(resetRecoveryAttempts: true);
         _startPlaybackWatchdog();
         _playbackState = ReaderPlaybackState.playing;
@@ -637,6 +647,8 @@ class TtsService extends ChangeNotifier {
 
     _errorMessage = null;
     final localSession = ++_sessionId;
+    _cancelUnexpectedPauseRecovery();
+    _pauseOrigin = _PauseOrigin.none;
     _playbackState = ReaderPlaybackState.playing;
     _queuedChunks = chunks;
     _queuedChunkIndex = 0;
@@ -721,6 +733,7 @@ class TtsService extends ChangeNotifier {
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
     _resumeAfterInterruption = false;
+    _cancelUnexpectedPauseRecovery();
     _stopPlaybackWatchdog();
     await _audioSession?.setActive(false);
 
@@ -748,6 +761,7 @@ class TtsService extends ChangeNotifier {
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
     _resumeAfterInterruption = false;
+    _cancelUnexpectedPauseRecovery();
     _stopPlaybackWatchdog();
     await _audioSession?.setActive(false);
 
@@ -795,6 +809,9 @@ class TtsService extends ChangeNotifier {
     if (!fromSystemInterruption) {
       _resumeAfterInterruption = false;
     }
+    _pauseOrigin =
+        fromSystemInterruption ? _PauseOrigin.system : _PauseOrigin.user;
+    _cancelUnexpectedPauseRecovery();
     _sessionId++;
     _pausedCharIndex = min(
       max(_currentCharIndex, _activeChunkOffset),
@@ -818,6 +835,8 @@ class TtsService extends ChangeNotifier {
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
     _resumeAfterInterruption = false;
+    _cancelUnexpectedPauseRecovery();
+    _pauseOrigin = _PauseOrigin.none;
     _stopPlaybackWatchdog();
     _playbackState = ReaderPlaybackState.stopped;
     _errorMessage = null;
@@ -998,9 +1017,28 @@ class TtsService extends ChangeNotifier {
     });
   }
 
+  void _cancelUnexpectedPauseRecovery() {
+    _unexpectedPauseRecoveryTimer?.cancel();
+    _unexpectedPauseRecoveryTimer = null;
+  }
+
+  void _scheduleUnexpectedPauseRecovery() {
+    _cancelUnexpectedPauseRecovery();
+    _unexpectedPauseRecoveryTimer = Timer(const Duration(seconds: 2), () {
+      if (_playbackState != ReaderPlaybackState.paused ||
+          _queuedChunks.isEmpty ||
+          _resumeAfterInterruption) {
+        return;
+      }
+
+      unawaited(_resumePlayback());
+    });
+  }
+
   void _stopPlaybackWatchdog() {
     _playbackWatchdog?.cancel();
     _playbackWatchdog = null;
+    _cancelUnexpectedPauseRecovery();
     _lastPlaybackActivityAt = null;
     _stallRecoveryAttempts = 0;
     _isRecoveringFromStall = false;
@@ -1060,6 +1098,7 @@ class TtsService extends ChangeNotifier {
     _interruptionSubscription?.cancel();
     _becomingNoisySubscription?.cancel();
     _playbackWatchdog?.cancel();
+    _unexpectedPauseRecoveryTimer?.cancel();
     unawaited(_flutterTts.stop());
     super.dispose();
   }
