@@ -712,7 +712,18 @@ class _ImportProgressDialog extends StatelessWidget {
               : (importer.importProgress! * 100).clamp(0, 100).round();
 
           return AlertDialog(
-            title: const Text('Importing web content'),
+            title: Row(
+              children: [
+                const Expanded(
+                  child: Text('Importing web content'),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: onMinimize,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
             content: SizedBox(
               width: 320,
               child: Column(
@@ -746,11 +757,6 @@ class _ImportProgressDialog extends StatelessWidget {
               ),
             ),
             actions: [
-              TextButton.icon(
-                onPressed: onMinimize,
-                icon: const Icon(Icons.minimize),
-                label: const Text('Minimize'),
-              ),
               TextButton.icon(
                 onPressed: importer.isCancellingImport
                     ? null
