@@ -47,6 +47,7 @@ Future<void> main() async {
 
   runApp(
     TextReaderApp(
+      storageService: storageService,
       themeController: themeController,
       ttsService: ttsService,
       novelImportController: novelImportController,
@@ -92,12 +93,14 @@ Future<void> _initializeRuntimeServices({
 class TextReaderApp extends StatelessWidget {
   const TextReaderApp({
     super.key,
+    required this.storageService,
     required this.themeController,
     required this.ttsService,
     required this.novelImportController,
     required this.audioHandlerController,
   });
 
+  final StorageService storageService;
   final ThemeController themeController;
   final TtsService ttsService;
   final NovelImportController novelImportController;
@@ -107,6 +110,7 @@ class TextReaderApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<StorageService>.value(value: storageService),
         ChangeNotifierProvider<ThemeController>.value(value: themeController),
         ChangeNotifierProvider<TtsService>.value(value: ttsService),
         ChangeNotifierProvider<NovelImportController>.value(

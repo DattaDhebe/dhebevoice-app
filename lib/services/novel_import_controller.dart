@@ -61,6 +61,11 @@ class NovelImportController extends ChangeNotifier {
 
   Future<void> initialize() async {
     _library = await _novelLibraryService.loadLibrary();
+    if (_library.isEmpty && !_storageService.hasSeededSampleBook) {
+      _library = [_buildSampleBook()];
+      await _novelLibraryService.saveLibrary(_library);
+      await _storageService.saveHasSeededSampleBook(true);
+    }
     _selectedWebAccessModeId = WebNovelImportService.normalizeAccessModeId(
       _storageService.webAccessModeId,
     );
@@ -417,5 +422,42 @@ class NovelImportController extends ChangeNotifier {
       resetPosition: true,
     );
     notifyListeners();
+  }
+
+  NovelBook _buildSampleBook() {
+    const chapters = [
+      NovelChapter(
+        title: 'Chapter 1 Welcome to DhebeVoice',
+        url: 'sample://dhebevoice/welcome',
+        order: 0,
+        content:
+            'Welcome to DhebeVoice. This sample book is here to help you try the app right away.\n\n'
+            'Use the Play button below to hear this chapter aloud. You can also open the chapters sheet to jump between sections, or open the full reader view to focus on the current paragraph.',
+      ),
+      NovelChapter(
+        title: 'Chapter 2 Import and Continue',
+        url: 'sample://dhebevoice/import',
+        order: 1,
+        content:
+            'DhebeVoice can read pasted text, imported files, and readable web pages.\n\n'
+            'Try importing a TXT, EPUB, or PDF file, or share a web link from your browser. Imported books and pages appear in the Book List so you can return to them later.',
+      ),
+      NovelChapter(
+        title: 'Chapter 3 Voices and Controls',
+        url: 'sample://dhebevoice/voices',
+        order: 2,
+        content:
+            'Open Settings to choose a voice, adjust speed, change pitch, or switch theme.\n\n'
+            'You can pause, resume, stop, jump by chapter, or play from a selected paragraph. If you no longer want this sample book, you can delete it from the Book List at any time.',
+      ),
+    ];
+
+    return NovelBook(
+      id: 'sample_dhebevoice_book',
+      title: 'Getting Started with DhebeVoice',
+      sourceUrl: 'sample://dhebevoice/getting-started',
+      importedAt: DateTime(2026, 5, 15),
+      chapters: chapters,
+    );
   }
 }

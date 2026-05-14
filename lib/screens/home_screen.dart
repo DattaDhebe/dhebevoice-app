@@ -8,6 +8,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import '../models/novel_book.dart';
 import '../services/audio_handler_controller.dart';
 import '../services/novel_import_controller.dart';
+import '../services/storage_service.dart';
 import '../services/tts_service.dart';
 import '../widgets/player_controls.dart';
 import 'settings_screen.dart';
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<List<SharedMediaFile>>? _shareSubscription;
   bool _isImportDialogOpen = false;
   bool _isImportDialogMinimized = false;
+  bool _hasScheduledFirstRunGuide = false;
 
   @override
   void initState() {
@@ -31,6 +33,100 @@ class _HomeScreenState extends State<HomeScreen> {
     final service = context.read<TtsService>();
     _textController = TextEditingController(text: service.text);
     _listenForSharedText();
+    _scheduleFirstRunGuide();
+  }
+
+  void _scheduleFirstRunGuide() {
+    if (_hasScheduledFirstRunGuide) {
+      return;
+    }
+    _hasScheduledFirstRunGuide = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_showFirstRunGuideIfNeeded());
+    });
+  }
+
+  Future<void> _showFirstRunGuideIfNeeded() async {
+    if (!mounted) {
+      return;
+    }
+
+    final storage = context.read<StorageService>();
+    if (storage.hasSeenHomeGuide) {
+      return;
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted) {
+      return;
+    }
+
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Welcome to DhebeVoice'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Here is the quickest way to get started:',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const _GuideRow(
+                  icon: Icons.edit_note_rounded,
+                  title: 'Paste or import text',
+                  body: 'Use the editor, import a file, or share a web link from your browser.',
+                ),
+                const SizedBox(height: 14),
+                const _GuideRow(
+                  icon: Icons.play_circle_outline_rounded,
+                  title: 'Start playback',
+                  body: 'Use Play, Pause, and Stop at the bottom to control reading aloud.',
+                ),
+                const SizedBox(height: 14),
+                const _GuideRow(
+                  icon: Icons.library_books_outlined,
+                  title: 'Open your Book List',
+                  body: 'Imported books and web pages stay in your library so you can return later.',
+                ),
+                const SizedBox(height: 14),
+                const _GuideRow(
+                  icon: Icons.menu_book_rounded,
+                  title: 'Jump by chapter or paragraph',
+                  body: 'Use Chapters and Play from paragraph to continue from the exact place you want.',
+                ),
+                const SizedBox(height: 14),
+                const _GuideRow(
+                  icon: Icons.tune_rounded,
+                  title: 'Choose your voice',
+                  body: 'Open Settings to change voice, speed, pitch, volume, and theme.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Got it'),
+            ),
+          ],
+        );
+      },
+    );
+
+    await storage.saveHasSeenHomeGuide(true);
   }
 
   Future<void> _listenForSharedText() async {
@@ -801,6 +897,63 @@ class _ChapterBadge extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
       ),
+    );
+  }
+}
+
+class _GuideRow extends StatelessWidget {
+  const _GuideRow({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            icon,
+            color: colorScheme.onPrimaryContainer,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                body,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
