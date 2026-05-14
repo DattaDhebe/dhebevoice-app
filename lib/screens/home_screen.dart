@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import '../models/novel_book.dart';
+import '../services/audio_handler_controller.dart';
 import '../services/novel_import_controller.dart';
 import '../services/tts_service.dart';
 import '../widgets/player_controls.dart';
@@ -273,8 +273,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showReaderPopup() {
-    final audioHandler = context.read<AudioHandler>();
-
     showDialog<void>(
       context: context,
       builder: (context) {
@@ -371,9 +369,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         isPlaying: ttsService.isPlaying,
                         canResume:
                             ttsService.isPaused || ttsService.currentCharIndex > 0,
-                        onPlay: () => unawaited(audioHandler.play()),
-                        onPause: () => unawaited(audioHandler.pause()),
-                        onStop: () => unawaited(audioHandler.stop()),
+                        onPlay: () => unawaited(_playUsingBestAvailableController()),
+                        onPause: () =>
+                            unawaited(_pauseUsingBestAvailableController()),
+                        onStop: () => unawaited(_stopUsingBestAvailableController()),
                         wrapInSafeArea: false,
                       ),
                     ],
@@ -421,6 +420,68 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final fallback = RegExp(r'(\d+)').firstMatch(value);
     return fallback == null ? null : int.tryParse(fallback.group(1) ?? '');
+  }
+
+  Future<void> _playUsingBestAvailableController() async {
+    final audioHandler = context.read<AudioHandlerController>().audioHandler;
+    if (audioHandler != null) {
+      await audioHandler.play();
+      return;
+    }
+
+    await context.read<TtsService>().play();
+  }
+
+  Future<void> _pauseUsingBestAvailableController() async {
+    final audioHandler = context.read<AudioHandlerController>().audioHandler;
+    if (audioHandler != null) {
+      await audioHandler.pause();
+      return;
+    }
+
+    await context.read<TtsService>().pause();
+  }
+
+  Future<void> _stopUsingBestAvailableController() async {
+    final audioHandler = context.read<AudioHandlerController>().audioHandler;
+    if (audioHandler != null) {
+      await audioHandler.stop();
+      return;
+    }
+
+    await context.read<TtsService>().stop();
+  }
+
+  Future<void> _skipToPreviousUsingBestAvailableController() async {
+    final audioHandler = context.read<AudioHandlerController>().audioHandler;
+    if (audioHandler != null) {
+      await audioHandler.skipToPrevious();
+      return;
+    }
+
+    final importer = context.read<NovelImportController>();
+    final ttsService = context.read<TtsService>();
+    final shouldResume = ttsService.isPlaying;
+    await importer.goToPreviousChapter();
+    if (shouldResume) {
+      await ttsService.play();
+    }
+  }
+
+  Future<void> _skipToNextUsingBestAvailableController() async {
+    final audioHandler = context.read<AudioHandlerController>().audioHandler;
+    if (audioHandler != null) {
+      await audioHandler.skipToNext();
+      return;
+    }
+
+    final importer = context.read<NovelImportController>();
+    final ttsService = context.read<TtsService>();
+    final shouldResume = ttsService.isPlaying;
+    await importer.goToNextChapter();
+    if (shouldResume) {
+      await ttsService.play();
+    }
   }
 
   void _syncImportDialog(NovelImportController importer) {
@@ -479,7 +540,8 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, importer, ttsService, _) {
         _syncImportDialog(importer);
         final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-        final audioHandler = context.read<AudioHandler>();
+        final audioHandlerController = context.watch<AudioHandlerController>();
+        final controlsReady = ttsService.hasInitialized;
 
         if (_textController.text != ttsService.text) {
           _textController.value = TextEditingValue(
@@ -532,13 +594,22 @@ class _HomeScreenState extends State<HomeScreen> {
           bottomNavigationBar: SafeArea(
             top: false,
             minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: PlayerControls(
-              isPlaying: ttsService.isPlaying,
-              canResume:
-                  ttsService.isPaused || ttsService.currentCharIndex > 0,
-              onPlay: () => unawaited(audioHandler.play()),
-              onPause: () => unawaited(audioHandler.pause()),
-              onStop: () => unawaited(audioHandler.stop()),
+            child: Opacity(
+              opacity: controlsReady ? 1 : 0.7,
+              child: IgnorePointer(
+                ignoring: !controlsReady,
+                child: PlayerControls(
+                  isPlaying: ttsService.isPlaying,
+                  canResume:
+                      ttsService.isPaused || ttsService.currentCharIndex > 0,
+                  onPlay: () =>
+                      unawaited(_playUsingBestAvailableController()),
+                  onPause: () =>
+                      unawaited(_pauseUsingBestAvailableController()),
+                  onStop: () =>
+                      unawaited(_stopUsingBestAvailableController()),
+                ),
+              ),
             ),
           ),
           body: SafeArea(
@@ -553,6 +624,43 @@ class _HomeScreenState extends State<HomeScreen> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   children: [
+                    if (ttsService.isInitializing) ...[
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Row(
+                            children: [
+                              const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2.6),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  'Preparing voices and playback controls…',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                              if (!audioHandlerController.isReady)
+                                Text(
+                                  'Starting',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     if (importer.isImporting && _isImportDialogMinimized)
                       _ImportMiniBar(
                         importer: importer,
@@ -584,9 +692,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         importer: importer,
                         onOpenChapters: _showChapterSheet,
                         onPreviousChapter: () =>
-                            unawaited(audioHandler.skipToPrevious()),
+                            unawaited(
+                              _skipToPreviousUsingBestAvailableController(),
+                            ),
                         onNextChapter: () =>
-                            unawaited(audioHandler.skipToNext()),
+                            unawaited(
+                              _skipToNextUsingBestAvailableController(),
+                            ),
                       ),
                     ],
                     const SizedBox(height: 16),

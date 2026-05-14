@@ -56,6 +56,8 @@ class TtsService extends ChangeNotifier {
   bool _queuedTriggerCompletionHandler = true;
   bool _engineReady = false;
   bool _resumeAfterInterruption = false;
+  bool _isInitializing = false;
+  bool _hasInitialized = false;
   bool _isRecoveringFromStall = false;
   int _stallRecoveryAttempts = 0;
   DateTime? _lastPlaybackActivityAt;
@@ -78,6 +80,8 @@ class TtsService extends ChangeNotifier {
 
   bool get isPlaying => _playbackState == ReaderPlaybackState.playing;
   bool get isPaused => _playbackState == ReaderPlaybackState.paused;
+  bool get isInitializing => _isInitializing;
+  bool get hasInitialized => _hasInitialized;
 
   void setPlaybackCompletedHandler(Future<void> Function()? handler) {
     _playbackCompletedHandler = handler;
@@ -94,23 +98,33 @@ class TtsService extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    if (_hasInitialized || _isInitializing) {
+      return;
+    }
+
+    _isInitializing = true;
+    notifyListeners();
+
     _text = _storageService.text;
     _speechRate = _storageService.rate;
     _pitch = _storageService.pitch;
     _volume = _storageService.volume;
     _currentCharIndex = _storageService.position;
+    try {
+      await _configureTts();
+      await _configureAudioSession();
+      await _loadVoices();
+      await _applyStoredSelections();
+      await _syncTtsOptions();
 
-    await _configureTts();
-    await _configureAudioSession();
-    await _loadVoices();
-    await _applyStoredSelections();
-    await _syncTtsOptions();
-
-    if (_text.isNotEmpty) {
-      _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
+      if (_text.isNotEmpty) {
+        _currentParagraphIndex = _paragraphIndexForOffset(_currentCharIndex);
+      }
+    } finally {
+      _isInitializing = false;
+      _hasInitialized = true;
+      notifyListeners();
     }
-
-    notifyListeners();
   }
 
   Future<void> _configureTts() async {

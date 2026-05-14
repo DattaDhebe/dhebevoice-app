@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/home_screen.dart';
+import 'services/audio_handler_controller.dart';
 import 'services/file_import_service.dart';
 import 'services/novel_import_controller.dart';
 import 'services/novel_library_service.dart';
@@ -22,89 +23,6 @@ const _systemChannel = MethodChannel('com.dhebe.dhebevoice/system');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const _BootstrapApp());
-}
-
-class _BootstrapApp extends StatefulWidget {
-  const _BootstrapApp();
-
-  @override
-  State<_BootstrapApp> createState() => _BootstrapAppState();
-}
-
-class _BootstrapAppState extends State<_BootstrapApp> {
-  _AppServices? _services;
-  Object? _error;
-  bool _isBootstrapping = false;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_bootstrap());
-  }
-
-  Future<void> _bootstrap() async {
-    if (_isBootstrapping) {
-      return;
-    }
-
-    setState(() {
-      _isBootstrapping = true;
-      _error = null;
-    });
-
-    try {
-      final services = await _initializeAppServices();
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _services = services;
-        _isBootstrapping = false;
-      });
-      unawaited(_ensureAndroidNotificationPermission());
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _error = error;
-        _isBootstrapping = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final services = _services;
-    if (services != null) {
-      return TextReaderApp(
-        themeController: services.themeController,
-        ttsService: services.ttsService,
-        novelImportController: services.novelImportController,
-        audioHandler: services.audioHandler,
-      );
-    }
-
-    return MaterialApp(
-      title: 'DhebeVoice',
-      debugShowCheckedModeBanner: false,
-      theme: _buildTheme(brightness: Brightness.light),
-      darkTheme: _buildTheme(brightness: Brightness.dark),
-      themeMode: ThemeMode.system,
-      home: _BootstrapScreen(
-        error: _error,
-        isLoading: _isBootstrapping,
-        onRetry: _bootstrap,
-      ),
-    );
-  }
-}
-
-Future<_AppServices> _initializeAppServices() async {
-  await _ensureAndroidPlaybackChannel();
 
   final storageService = StorageService();
   await storageService.initialize();
@@ -113,12 +31,12 @@ Future<_AppServices> _initializeAppServices() async {
   final fileImportService = FileImportService();
   final themeController = ThemeController(storageService: storageService);
   await themeController.initialize();
+  final audioHandlerController = AudioHandlerController();
 
   final ttsService = TtsService(
     storageService: storageService,
     fileImportService: fileImportService,
   );
-  await ttsService.initialize();
   final novelImportController = NovelImportController(
     storageService: storageService,
     fileImportService: fileImportService,
@@ -126,6 +44,33 @@ Future<_AppServices> _initializeAppServices() async {
     webNovelImportService: webNovelImportService,
     ttsService: ttsService,
   );
+
+  runApp(
+    TextReaderApp(
+      themeController: themeController,
+      ttsService: ttsService,
+      novelImportController: novelImportController,
+      audioHandlerController: audioHandlerController,
+    ),
+  );
+
+  unawaited(
+    _initializeRuntimeServices(
+      ttsService: ttsService,
+      novelImportController: novelImportController,
+      audioHandlerController: audioHandlerController,
+    ),
+  );
+}
+
+Future<void> _initializeRuntimeServices({
+  required TtsService ttsService,
+  required NovelImportController novelImportController,
+  required AudioHandlerController audioHandlerController,
+}) async {
+  await _ensureAndroidPlaybackChannel();
+  unawaited(_ensureAndroidNotificationPermission());
+  await ttsService.initialize();
   await novelImportController.initialize();
   final audioHandler = await AudioService.init(
     builder: () => ReaderAudioHandler(
@@ -142,183 +87,21 @@ Future<_AppServices> _initializeAppServices() async {
     ),
   );
 
-  return _AppServices(
-    themeController: themeController,
-    ttsService: ttsService,
-    novelImportController: novelImportController,
-    audioHandler: audioHandler,
-  );
+  audioHandlerController.attach(audioHandler);
 }
-
-Future<void> _ensureAndroidPlaybackChannel() async {
-  if (defaultTargetPlatform != TargetPlatform.android) {
-    return;
-  }
-
-  try {
-    await _systemChannel.invokeMethod<void>(
-      'ensurePlaybackChannel',
-      <String, dynamic>{
-        'id': _playbackChannelId,
-        'name': 'DhebeVoice Playback',
-        'description': 'Playback controls for DhebeVoice reading sessions',
-      },
-    );
-  } on PlatformException {
-    // The audio_service plugin can still create its own fallback channel.
-  }
-}
-
-Future<void> _ensureAndroidNotificationPermission() async {
-  if (defaultTargetPlatform != TargetPlatform.android) {
-    return;
-  }
-
-  try {
-    await _systemChannel.invokeMethod<bool>('ensureNotificationPermission');
-  } on PlatformException {
-    // Playback can still continue even if the permission prompt fails.
-  }
-}
-
-class _AppServices {
-  const _AppServices({
-    required this.themeController,
-    required this.ttsService,
-    required this.novelImportController,
-    required this.audioHandler,
-  });
-
-  final ThemeController themeController;
-  final TtsService ttsService;
-  final NovelImportController novelImportController;
-  final AudioHandler audioHandler;
-}
-
-class _BootstrapScreen extends StatelessWidget {
-  const _BootstrapScreen({
-    required this.error,
-    required this.isLoading,
-    required this.onRetry,
-  });
-
-  final Object? error;
-  final bool isLoading;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final hasError = error != null;
-
-    return Scaffold(
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              colorScheme.primaryContainer.withValues(alpha: 0.92),
-              theme.scaffoldBackgroundColor,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(28),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircleAvatar(
-                          radius: 34,
-                          backgroundColor: colorScheme.primaryContainer,
-                          child: Icon(
-                            Icons.record_voice_over_rounded,
-                            size: 34,
-                            color: colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'DhebeVoice',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          hasError
-                              ? 'The app could not finish loading.'
-                              : 'Preparing your reader and playback services…',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        if (hasError) ...[
-                          Text(
-                            error.toString(),
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.error,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          FilledButton.icon(
-                            onPressed: isLoading ? null : () => unawaited(onRetry()),
-                            icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Retry'),
-                          ),
-                        ] else ...[
-                          const SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(strokeWidth: 3),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'This screen should appear right away while the app finishes loading.',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class TextReaderApp extends StatelessWidget {
   const TextReaderApp({
     super.key,
     required this.themeController,
     required this.ttsService,
     required this.novelImportController,
-    required this.audioHandler,
+    required this.audioHandlerController,
   });
 
   final ThemeController themeController;
   final TtsService ttsService;
   final NovelImportController novelImportController;
-  final AudioHandler audioHandler;
+  final AudioHandlerController audioHandlerController;
 
   @override
   Widget build(BuildContext context) {
@@ -329,7 +112,9 @@ class TextReaderApp extends StatelessWidget {
         ChangeNotifierProvider<NovelImportController>.value(
           value: novelImportController,
         ),
-        Provider<AudioHandler>.value(value: audioHandler),
+        ChangeNotifierProvider<AudioHandlerController>.value(
+          value: audioHandlerController,
+        ),
       ],
       child: Consumer<ThemeController>(
         builder: (context, controller, _) {
@@ -464,4 +249,35 @@ ThemeData _buildTheme({required Brightness brightness}) {
       showValueIndicator: ShowValueIndicator.onDrag,
     ),
   );
+}
+
+Future<void> _ensureAndroidPlaybackChannel() async {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return;
+  }
+
+  try {
+    await _systemChannel.invokeMethod<void>(
+      'ensurePlaybackChannel',
+      <String, dynamic>{
+        'id': _playbackChannelId,
+        'name': 'DhebeVoice Playback',
+        'description': 'Playback controls for DhebeVoice reading sessions',
+      },
+    );
+  } on PlatformException {
+    // The audio_service plugin can still create its own fallback channel.
+  }
+}
+
+Future<void> _ensureAndroidNotificationPermission() async {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return;
+  }
+
+  try {
+    await _systemChannel.invokeMethod<bool>('ensureNotificationPermission');
+  } on PlatformException {
+    // Playback can still continue even if the permission prompt fails.
+  }
 }
