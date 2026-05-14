@@ -257,7 +257,8 @@ class NovelImportController extends ChangeNotifier {
         completedWithoutCancellation = true;
       }
     } catch (error) {
-      _errorMessage = error.toString().replaceFirst('Exception: ', '');
+      _importStatus = 'Could not import that web page.';
+      _errorMessage = _friendlyImportError(error);
     } finally {
       if (completedWithoutCancellation &&
           _pendingSharedUrl?.trim() == url.trim()) {
@@ -278,6 +279,15 @@ class NovelImportController extends ChangeNotifier {
     _isCancellingImport = true;
     _importStatus = 'Stopping import after the current chapter...';
     notifyListeners();
+  }
+
+  String _friendlyImportError(Object error) {
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+    if (raw.isEmpty) {
+      return 'Something went wrong while importing that web page. Please try again.';
+    }
+
+    return raw;
   }
 
   Future<void> selectNovel(String novelId, {int? chapterIndex}) async {

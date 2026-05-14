@@ -63,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return AlertDialog(
           scrollable: true,
-          title: const Text('Import novel link'),
+          title: const Text('Import web link'),
           content: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -73,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 autofocus: true,
                 keyboardType: TextInputType.url,
                 decoration: const InputDecoration(
-                  hintText: 'Paste chapter or contents URL',
+                  hintText: 'Paste web page URL',
                 ),
               ),
               const SizedBox(height: 12),
@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
             height: MediaQuery.of(context).size.height * 0.72,
             child: importer.library.isEmpty
                 ? const Center(
-                    child: Text('Imported web novels will appear here.'),
+                    child: Text('Imported books and web pages will appear here.'),
                   )
                 : ListView.builder(
                     itemCount: importer.library.length + 1,
@@ -124,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         return Padding(
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                           child: Text(
-                            'Books List',
+                            'Book List',
                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -628,7 +628,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                             decoration: const InputDecoration(
                               hintText:
-                                  'Paste text here, import a .txt, .epub, or .pdf file, or share a novel link from your browser.',
+                'Paste text here, import a .txt, .epub, or .pdf file, or share a web link from your browser.',
                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
@@ -712,7 +712,7 @@ class _ImportProgressDialog extends StatelessWidget {
               : (importer.importProgress! * 100).clamp(0, 100).round();
 
           return AlertDialog(
-            title: const Text('Importing web novel'),
+            title: const Text('Importing web content'),
             content: SizedBox(
               width: 320,
               child: Column(
@@ -720,7 +720,7 @@ class _ImportProgressDialog extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    importer.importStatus ?? 'Preparing chapters...',
+                    importer.importStatus ?? 'Preparing import...',
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 14),
@@ -736,7 +736,7 @@ class _ImportProgressDialog extends StatelessWidget {
                   ] else ...[
                     const SizedBox(height: 10),
                     Text(
-                      'Following chapter links and importing text...',
+                      'Following links and importing text...',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurface,
                           ),
@@ -797,7 +797,7 @@ class _ImportMiniBar extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Importing web novel',
+                    'Importing web content',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
@@ -850,6 +850,7 @@ class _ImportStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasPendingSharedUrl = importer.hasPendingSharedUrl;
+    final hasImportError = importer.errorMessage != null;
     final pendingUri = hasPendingSharedUrl
         ? Uri.tryParse(importer.pendingSharedUrl!)
         : null;
@@ -879,7 +880,9 @@ class _ImportStatusCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     importer.isImporting
-                        ? 'Importing web novel'
+                        ? 'Importing web content'
+                        : hasImportError && hasPendingSharedUrl
+                            ? 'Web import failed'
                         : hasPendingSharedUrl
                             ? 'Shared web link ready'
                             : 'Web import',
@@ -959,12 +962,16 @@ class _ImportStatusCard extends StatelessWidget {
                     hasPendingSharedUrl ? onStartPendingImport : onStartImport,
                 icon: Icon(
                   hasPendingSharedUrl
-                      ? Icons.play_circle_outline
+                      ? hasImportError
+                          ? Icons.refresh_rounded
+                          : Icons.play_circle_outline
                       : Icons.add_link,
                 ),
                 label: Text(
                   hasPendingSharedUrl
-                      ? 'Start web import'
+                      ? hasImportError
+                          ? 'Try web import again'
+                          : 'Start web import'
                       : 'Paste or import web link',
                 ),
                 style: FilledButton.styleFrom(

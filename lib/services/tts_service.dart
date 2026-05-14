@@ -19,6 +19,8 @@ class TtsService extends ChangeNotifier {
   static const _defaultSpeechRate = 0.48;
   static const _defaultPitch = 1.0;
   static const _defaultVolume = 1.0;
+  static const _watchdogCheckInterval = Duration(seconds: 4);
+  static const _watchdogTimeout = Duration(seconds: 12);
 
   TtsService({
     required StorageService storageService,
@@ -54,7 +56,11 @@ class TtsService extends ChangeNotifier {
   bool _queuedTriggerCompletionHandler = true;
   bool _engineReady = false;
   bool _resumeAfterInterruption = false;
+  bool _isRecoveringFromStall = false;
+  int _stallRecoveryAttempts = 0;
+  DateTime? _lastPlaybackActivityAt;
   Future<void> Function()? _playbackCompletedHandler;
+  Timer? _playbackWatchdog;
 
   List<VoiceModel> get voices => _voices;
   ReaderPlaybackState get playbackState => _playbackState;
@@ -113,21 +119,26 @@ class TtsService extends ChangeNotifier {
       await _flutterTts.setQueueMode(0);
 
       _flutterTts.setStartHandler(() {
+        _markPlaybackActivity(resetRecoveryAttempts: true);
         _playbackState = ReaderPlaybackState.playing;
         _errorMessage = null;
         notifyListeners();
       });
 
       _flutterTts.setCompletionHandler(() {
+        _markPlaybackActivity(resetRecoveryAttempts: true);
         unawaited(_handleChunkCompleted());
       });
 
       _flutterTts.setPauseHandler(() {
+        _stopPlaybackWatchdog();
         _playbackState = ReaderPlaybackState.paused;
         notifyListeners();
       });
 
       _flutterTts.setContinueHandler(() {
+        _markPlaybackActivity(resetRecoveryAttempts: true);
+        _startPlaybackWatchdog();
         _playbackState = ReaderPlaybackState.playing;
         _errorMessage = null;
         notifyListeners();
@@ -138,6 +149,7 @@ class TtsService extends ChangeNotifier {
       });
 
       _flutterTts.setProgressHandler((text, start, end, word) {
+        _markPlaybackActivity(resetRecoveryAttempts: true);
         final activeChunk = _queuedChunks.isEmpty
             ? null
             : _queuedChunks[min(_queuedChunkIndex, _queuedChunks.length - 1)];
@@ -620,6 +632,8 @@ class TtsService extends ChangeNotifier {
     _activeChunkOffset = chunks.first.start;
     _pausedCharIndex = startOffset;
     _currentParagraphIndex = chunks.first.paragraphIndex;
+    _markPlaybackActivity(resetRecoveryAttempts: true);
+    _startPlaybackWatchdog();
     notifyListeners();
 
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -631,57 +645,36 @@ class TtsService extends ChangeNotifier {
       await _flutterTts.stop();
     }
 
-    final queued = await _queueChunks(chunks, localSession);
-    if (!queued && _isPlaybackSessionActive(localSession)) {
+    final started = await _startCurrentChunk(localSession);
+    if (!started && _isPlaybackSessionActive(localSession)) {
       await _handlePlaybackError(
         'DhebeVoice could not start the selected voice. Try another installed voice.',
       );
     }
   }
 
-  Future<bool> _queueChunks(List<_SpeechChunk> chunks, int sessionId) async {
+  Future<bool> _startCurrentChunk(int sessionId) async {
+    if (_queuedChunks.isEmpty || _queuedChunkIndex >= _queuedChunks.length) {
+      return false;
+    }
+    if (!_isPlaybackSessionActive(sessionId)) {
+      return false;
+    }
+
+    final chunk = _queuedChunks[_queuedChunkIndex];
+    _activeChunkOffset = chunk.start;
+    _currentParagraphIndex = chunk.paragraphIndex;
+
     await _flutterTts.setQueueMode(0);
-    final firstResult = await _flutterTts.speak(
-      chunks.first.text,
+    final result = await _flutterTts.speak(
+      chunk.text,
       focus: false,
     );
-    if (!_isPlaybackSessionActive(sessionId)) {
-      await _flutterTts.setQueueMode(0);
-      return false;
-    }
-    if (firstResult != 1) {
-      await _flutterTts.setQueueMode(0);
-      return false;
-    }
-
-    if (chunks.length == 1) {
-      await _flutterTts.setQueueMode(0);
-      return true;
-    }
-
-    await _flutterTts.setQueueMode(1);
-    for (final chunk in chunks.skip(1)) {
-      if (!_isPlaybackSessionActive(sessionId)) {
-        await _flutterTts.setQueueMode(0);
-        return false;
-      }
-
-      final result = await _flutterTts.speak(
-        chunk.text,
-        focus: false,
-      );
-      if (result != 1) {
-        await _flutterTts.setQueueMode(0);
-        return false;
-      }
-    }
-
-    await _flutterTts.setQueueMode(0);
-    return true;
+    return _isPlaybackSessionActive(sessionId) && result == 1;
   }
 
   Future<void> _handleChunkCompleted() async {
-    if (_queuedChunks.isEmpty) {
+    if (_queuedChunks.isEmpty || _playbackState != ReaderPlaybackState.playing) {
       return;
     }
 
@@ -698,6 +691,11 @@ class TtsService extends ChangeNotifier {
       _activeChunkOffset = nextChunk.start;
       _currentParagraphIndex = nextChunk.paragraphIndex;
       notifyListeners();
+      final localSession = _sessionId;
+      final started = await _startCurrentChunk(localSession);
+      if (!started && _isPlaybackSessionActive(localSession)) {
+        await _recoverFromPlaybackStall();
+      }
       return;
     }
 
@@ -709,6 +707,7 @@ class TtsService extends ChangeNotifier {
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
     _resumeAfterInterruption = false;
+    _stopPlaybackWatchdog();
     await _audioSession?.setActive(false);
 
     _playbackState = ReaderPlaybackState.completed;
@@ -735,6 +734,7 @@ class TtsService extends ChangeNotifier {
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
     _resumeAfterInterruption = false;
+    _stopPlaybackWatchdog();
     await _audioSession?.setActive(false);
 
     _playbackState = ReaderPlaybackState.error;
@@ -787,6 +787,7 @@ class TtsService extends ChangeNotifier {
       _text.length,
     );
     _currentCharIndex = _pausedCharIndex;
+    _stopPlaybackWatchdog();
     _playbackState = ReaderPlaybackState.paused;
     _errorMessage = null;
     await _flutterTts.pause();
@@ -803,6 +804,7 @@ class TtsService extends ChangeNotifier {
     _queuedChunkIndex = 0;
     _queuedEndOffset = null;
     _resumeAfterInterruption = false;
+    _stopPlaybackWatchdog();
     _playbackState = ReaderPlaybackState.stopped;
     _errorMessage = null;
     _currentCharIndex = 0;
@@ -968,10 +970,82 @@ class TtsService extends ChangeNotifier {
     return chunks;
   }
 
+  void _markPlaybackActivity({bool resetRecoveryAttempts = false}) {
+    _lastPlaybackActivityAt = DateTime.now();
+    if (resetRecoveryAttempts) {
+      _stallRecoveryAttempts = 0;
+    }
+  }
+
+  void _startPlaybackWatchdog() {
+    _playbackWatchdog?.cancel();
+    _playbackWatchdog = Timer.periodic(_watchdogCheckInterval, (_) {
+      unawaited(_handlePlaybackWatchdogTick());
+    });
+  }
+
+  void _stopPlaybackWatchdog() {
+    _playbackWatchdog?.cancel();
+    _playbackWatchdog = null;
+    _lastPlaybackActivityAt = null;
+    _stallRecoveryAttempts = 0;
+    _isRecoveringFromStall = false;
+  }
+
+  Future<void> _handlePlaybackWatchdogTick() async {
+    if (!isPlaying || _queuedChunks.isEmpty || _isRecoveringFromStall) {
+      return;
+    }
+
+    final lastPlaybackActivityAt = _lastPlaybackActivityAt;
+    if (lastPlaybackActivityAt == null) {
+      return;
+    }
+
+    if (DateTime.now().difference(lastPlaybackActivityAt) < _watchdogTimeout) {
+      return;
+    }
+
+    if (_stallRecoveryAttempts >= 2) {
+      await _handlePlaybackError(
+        'DhebeVoice lost playback unexpectedly. Tap Resume to continue from the last paragraph.',
+      );
+      return;
+    }
+
+    await _recoverFromPlaybackStall();
+  }
+
+  Future<void> _recoverFromPlaybackStall() async {
+    if (_isRecoveringFromStall) {
+      return;
+    }
+
+    _isRecoveringFromStall = true;
+    _stallRecoveryAttempts++;
+
+    try {
+      final resumeOffset = min(
+        max(_currentCharIndex, _activeChunkOffset),
+        _text.length,
+      );
+
+      await _playInternal(
+        startOffset: resumeOffset,
+        endOffset: _queuedEndOffset,
+        triggerCompletionHandler: _queuedTriggerCompletionHandler,
+        resetPositionOnComplete: _queuedResetPositionOnComplete,
+      );
+    } finally {
+      _isRecoveringFromStall = false;
+    }
+  }
+
   @override
   void dispose() {
     _interruptionSubscription?.cancel();
     _becomingNoisySubscription?.cancel();
+    _playbackWatchdog?.cancel();
     unawaited(_flutterTts.stop());
     super.dispose();
   }

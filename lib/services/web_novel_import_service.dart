@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
@@ -129,10 +131,28 @@ class WebNovelImportService {
     required String accessModeId,
   }) async {
     final resolvedAccessModeId = normalizeAccessModeId(accessModeId);
-    final response = await _client.get(
-      uri,
-      headers: _headersForMode(uri, resolvedAccessModeId),
-    );
+    http.Response response;
+    try {
+      response = await _client
+          .get(
+            uri,
+            headers: _headersForMode(uri, resolvedAccessModeId),
+          )
+          .timeout(const Duration(seconds: 25));
+    } on SocketException {
+      throw Exception(
+        'Could not reach ${uri.host}. Check your internet connection and try again.',
+      );
+    } on TimeoutException {
+      throw Exception(
+        '${uri.host} took too long to respond. Try again in a moment.',
+      );
+    } on http.ClientException {
+      throw Exception(
+        'Could not connect to ${uri.host} for web import right now.',
+      );
+    }
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
       if (response.statusCode == 403) {
         throw Exception(
