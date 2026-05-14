@@ -52,6 +52,12 @@ app.*.map.json
 /current_*.xml
 /device_screen*.png
 /window_dump*.xml
+/assets/store/screenshots/*.xml
+/assets/store/screenshots/home-for-popup.png
+/assets/store/screenshots/novel_library.json
+/assets/store/screenshots/pending-share.png
+/assets/store/screenshots/popup-clean.png
+/assets/store/screenshots/popup-with-keyboard-current.png
 
 # Android local Kotlin cache
 /android/.kotlin/
