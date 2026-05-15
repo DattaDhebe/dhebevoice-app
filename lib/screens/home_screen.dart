@@ -24,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _textController;
   StreamSubscription<List<SharedMediaFile>>? _shareSubscription;
   bool _isImportDialogOpen = false;
+  bool _isImportSetupDialogOpen = false;
   bool _isImportDialogMinimized = false;
   bool _hasScheduledFirstRunGuide = false;
 
@@ -136,67 +137,93 @@ class _HomeScreenState extends State<HomeScreen> {
         ReceiveSharingIntent.instance.getMediaStream().listen((value) async {
       final sharedText = _extractSharedText(value);
       if (sharedText != null) {
-        await importer.handleSharedPayload(sharedText);
+        await _handleIncomingSharedText(importer, sharedText);
       }
     });
 
     final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
     final initialText = _extractSharedText(initialMedia);
     if (initialText != null) {
-      await importer.handleSharedPayload(initialText);
+      await _handleIncomingSharedText(importer, initialText);
       await ReceiveSharingIntent.instance.reset();
     }
   }
 
+  Future<void> _handleIncomingSharedText(
+    NovelImportController importer,
+    String sharedText,
+  ) async {
+    await importer.handleSharedPayload(sharedText);
+    if (!mounted || !importer.hasPendingSharedUrl) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isImportSetupDialogOpen || _isImportDialogOpen) {
+        return;
+      }
+      unawaited(_showImportUrlDialog());
+    });
+  }
+
   Future<void> _showImportUrlDialog() async {
     final importer = context.read<NovelImportController>();
+    if (_isImportSetupDialogOpen) {
+      return;
+    }
     final controller = TextEditingController(
       text: importer.pendingSharedUrl ?? '',
     );
+    _isImportSetupDialogOpen = true;
 
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          scrollable: true,
-          title: const Text('Import web link'),
-          content: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: TextInputType.url,
-                decoration: const InputDecoration(
-                  hintText: 'Paste web page URL',
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            scrollable: true,
+            title: const Text('Import web link'),
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.url,
+                  decoration: const InputDecoration(
+                    hintText: 'Paste web page URL',
+                  ),
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  'Import only text you own, are licensed to access, or that is in the public domain.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Import only text you own, are licensed to access, or that is in the public domain.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+              FilledButton(
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await importer.importNovelFromUrl(controller.text);
+                },
+                child: const Text('Start import'),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await importer.importNovelFromUrl(controller.text);
-              },
-              child: const Text('Import'),
-            ),
-          ],
-        );
-      },
-    );
+          );
+        },
+      );
+    } finally {
+      _isImportSetupDialogOpen = false;
+      controller.dispose();
+    }
   }
 
   void _showLibrarySheet() {
