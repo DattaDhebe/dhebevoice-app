@@ -20,7 +20,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final TextEditingController _textController;
   StreamSubscription<List<SharedMediaFile>>? _shareSubscription;
   bool _isImportDialogOpen = false;
@@ -31,10 +31,25 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final service = context.read<TtsService>();
     _textController = TextEditingController(text: service.text);
     _listenForSharedText();
     _scheduleFirstRunGuide();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) {
+      return;
+    }
+
+    final ttsService = context.read<TtsService>();
+    unawaited(ttsService.handleAppLifecycleState(state));
+
+    if (state == AppLifecycleState.resumed) {
+      setState(() {});
+    }
   }
 
   void _scheduleFirstRunGuide() {
@@ -725,6 +740,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _shareSubscription?.cancel();
     _textController.dispose();
     super.dispose();

@@ -84,7 +84,7 @@ Future<void> _initializeRuntimeServices({
       androidNotificationChannelDescription:
           'Playback controls for DhebeVoice reading sessions',
       androidNotificationOngoing: false,
-      androidStopForegroundOnPause: true,
+      androidStopForegroundOnPause: false,
     ),
   );
 

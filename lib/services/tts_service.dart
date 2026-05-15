@@ -4,7 +4,7 @@ import 'dart:math';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 import '../models/voice_model.dart';
@@ -67,6 +67,7 @@ class TtsService extends ChangeNotifier {
   Timer? _playbackWatchdog;
   Timer? _unexpectedPauseRecoveryTimer;
   _PauseOrigin _pauseOrigin = _PauseOrigin.none;
+  AppLifecycleState _appLifecycleState = AppLifecycleState.resumed;
 
   List<VoiceModel> get voices => _voices;
   ReaderPlaybackState get playbackState => _playbackState;
@@ -212,10 +213,10 @@ class TtsService extends ChangeNotifier {
 
             switch (event.type) {
               case AudioInterruptionType.pause:
-              case AudioInterruptionType.unknown:
                 _resumeAfterInterruption = true;
                 unawaited(pause(fromSystemInterruption: true));
               case AudioInterruptionType.duck:
+              case AudioInterruptionType.unknown:
                 break;
             }
             return;
@@ -223,7 +224,6 @@ class TtsService extends ChangeNotifier {
 
           switch (event.type) {
             case AudioInterruptionType.pause:
-            case AudioInterruptionType.unknown:
               if (_resumeAfterInterruption && isPaused) {
                 _resumeAfterInterruption = false;
                 unawaited(play());
@@ -231,6 +231,7 @@ class TtsService extends ChangeNotifier {
                 _resumeAfterInterruption = false;
               }
             case AudioInterruptionType.duck:
+            case AudioInterruptionType.unknown:
               break;
           }
         });
@@ -1049,6 +1050,12 @@ class TtsService extends ChangeNotifier {
       return;
     }
 
+    if (_appLifecycleState == AppLifecycleState.paused ||
+        _appLifecycleState == AppLifecycleState.inactive ||
+        _appLifecycleState == AppLifecycleState.hidden) {
+      return;
+    }
+
     final lastPlaybackActivityAt = _lastPlaybackActivityAt;
     if (lastPlaybackActivityAt == null) {
       return;
@@ -1091,6 +1098,20 @@ class TtsService extends ChangeNotifier {
     } finally {
       _isRecoveringFromStall = false;
     }
+  }
+
+  Future<void> handleAppLifecycleState(AppLifecycleState state) async {
+    _appLifecycleState = state;
+
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        state == AppLifecycleState.resumed &&
+        (_playbackState == ReaderPlaybackState.playing ||
+            _playbackState == ReaderPlaybackState.paused)) {
+      unawaited(AudioService.androidForceEnableMediaButtons());
+    }
+
+    notifyListeners();
   }
 
   @override
