@@ -161,10 +161,21 @@ class ReaderAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       ReaderPlaybackState.error => AudioProcessingState.error,
     };
 
-    final compactActionIndices = <int>[];
-    for (var i = 0; i < controls.length && compactActionIndices.length < 3; i++) {
-      compactActionIndices.add(i);
-    }
+    final playPauseIndex = controls.indexWhere(
+      (control) => control == MediaControl.play || control == MediaControl.pause,
+    );
+    final stopIndex = controls.indexOf(MediaControl.stop);
+    final nextIndex = controls.indexOf(MediaControl.skipToNext);
+    final previousIndex = controls.indexOf(MediaControl.skipToPrevious);
+
+    final compactActionIndices = <int>[
+      if (playPauseIndex >= 0) playPauseIndex,
+      if (stopIndex >= 0) stopIndex,
+      if (nextIndex >= 0)
+        nextIndex
+      else if (previousIndex >= 0)
+        previousIndex,
+    ];
 
     playbackState.add(
       playbackState.value.copyWith(

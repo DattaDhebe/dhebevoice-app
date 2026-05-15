@@ -482,6 +482,79 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showContentPopup() {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        final dialogWidth = min(MediaQuery.sizeOf(context).width * 0.94, 760.0);
+        final dialogHeight =
+            min(MediaQuery.sizeOf(context).height * 0.76, 680.0);
+        final contentText = _textController.text.trim().isEmpty
+            ? 'Paste text here, import a file, or share a web link from your browser.'
+            : _textController.text;
+
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+          child: SizedBox(
+            width: dialogWidth,
+            height: dialogHeight,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Reading content',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: SelectionArea(
+                        child: SingleChildScrollView(
+                          child: Text(
+                            contentText,
+                            style:
+                                Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      height: 1.55,
+                                    ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   String? _extractSharedText(List<SharedMediaFile> sharedItems) {
     for (final item in sharedItems) {
       final candidate = switch (item.type) {
@@ -803,54 +876,91 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
-                          child: TextField(
-                            controller: _textController,
-                            maxLines: null,
-                            expands: true,
-                            textAlignVertical: TextAlignVertical.top,
-                            style:
-                                Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      height: 1.5,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Reading content',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                     ),
-                            contextMenuBuilder: (context, editableTextState) {
-                              final selection =
-                                  editableTextState.textEditingValue.selection;
-                              final buttonItems = <ContextMenuButtonItem>[
-                                ...editableTextState.contextMenuButtonItems,
-                                if (selection.isValid && !selection.isCollapsed)
-                                  ContextMenuButtonItem(
-                                    label: 'Play selection',
-                                    onPressed: () {
-                                      ContextMenuController.removeAny();
-                                      unawaited(
-                                        ttsService.playSelection(selection),
-                                      );
-                                    },
                                   ),
-                              ];
+                                  FilledButton.tonalIcon(
+                                    onPressed: _showContentPopup,
+                                    icon: const Icon(Icons.open_in_full),
+                                    label: const Text('View full'),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: _textController,
+                                  maxLines: null,
+                                  expands: true,
+                                  textAlignVertical: TextAlignVertical.top,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(
+                                        height: 1.5,
+                                      ),
+                                  contextMenuBuilder:
+                                      (context, editableTextState) {
+                                    final selection = editableTextState
+                                        .textEditingValue.selection;
+                                    final buttonItems = <ContextMenuButtonItem>[
+                                      ...editableTextState
+                                          .contextMenuButtonItems,
+                                      if (selection.isValid &&
+                                          !selection.isCollapsed)
+                                        ContextMenuButtonItem(
+                                          label: 'Play selection',
+                                          onPressed: () {
+                                            ContextMenuController.removeAny();
+                                            unawaited(
+                                              ttsService.playSelection(
+                                                selection,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                    ];
 
-                              return AdaptiveTextSelectionToolbar.buttonItems(
-                                anchors: editableTextState.contextMenuAnchors,
-                                buttonItems: buttonItems,
-                              );
-                            },
-                            decoration: const InputDecoration(
-                              hintText:
-                'Paste text here, import a .txt, .epub, or .pdf file, or share a web link from your browser.',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              disabledBorder: InputBorder.none,
-                              errorBorder: InputBorder.none,
-                              focusedErrorBorder: InputBorder.none,
-                              filled: false,
-                              isCollapsed: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            onChanged: (value) {
-                              unawaited(importer.detachIfTextChanged(value));
-                              unawaited(ttsService.updateText(value));
-                            },
+                                    return AdaptiveTextSelectionToolbar
+                                        .buttonItems(
+                                      anchors:
+                                          editableTextState.contextMenuAnchors,
+                                      buttonItems: buttonItems,
+                                    );
+                                  },
+                                  decoration: const InputDecoration(
+                                    hintText:
+                                        'Paste text here, import a .txt, .epub, or .pdf file, or share a web link from your browser.',
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    disabledBorder: InputBorder.none,
+                                    errorBorder: InputBorder.none,
+                                    focusedErrorBorder: InputBorder.none,
+                                    filled: false,
+                                    isCollapsed: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (value) {
+                                    unawaited(importer.detachIfTextChanged(value));
+                                    unawaited(ttsService.updateText(value));
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

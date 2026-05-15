@@ -398,7 +398,13 @@ class NovelImportController extends ChangeNotifier {
     }
 
     final nextIndex = _activeChapterIndex + 1;
-    await selectChapter(nextIndex);
+    await _activateChapter(
+      novel: novel,
+      chapterIndex: nextIndex,
+      persistLastRead: true,
+      stopPlayback: false,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 120));
     await _ttsService.play();
   }
 
@@ -406,6 +412,7 @@ class NovelImportController extends ChangeNotifier {
     required NovelBook novel,
     required int chapterIndex,
     required bool persistLastRead,
+    bool stopPlayback = true,
   }) async {
     _activeNovel = novel;
     _activeChapterIndex = chapterIndex;
@@ -416,7 +423,9 @@ class NovelImportController extends ChangeNotifier {
     if (persistLastRead) {
       await _updateLastReadChapter(novel.id, chapterIndex);
     }
-    await _ttsService.stop();
+    if (stopPlayback) {
+      await _ttsService.stop();
+    }
     await _ttsService.updateText(
       novel.chapters[chapterIndex].content,
       resetPosition: true,
